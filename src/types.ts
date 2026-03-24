@@ -10,6 +10,15 @@ export type HotspotType =
   | 'video_cta'
   | 'email_signup_image';
 
+export interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'tel' | 'number' | 'textarea' | 'select';
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  options?: string[];
+}
+
 export interface Hotspot {
   id: string;
   type: HotspotType;
@@ -24,10 +33,17 @@ export interface Hotspot {
   icon?: string;
   backgroundColor?: string;
   iconColor?: string;
+  iconName?: string;
   pulseAnimation?: boolean;
   triggerType?: 'click' | 'hover';
+  roundness?: number;
+  redirectUrl?: string;
+  currency?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  formFields?: FormField[];
   action: {
-    type: string;
+    type: 'url' | 'email' | 'phone' | 'video' | 'form';
     value: string;
   };
   radius?: number;
@@ -53,6 +69,8 @@ export interface Campaign {
   userId: string;
   createdAt: string;
   hotspots: Hotspot[];
+  watermarkUrl?: string;
+  soundUrl?: string;
   filters?: {
     brightness?: number;
     contrast?: number;
@@ -89,5 +107,6 @@ export interface AnalyticsEvent {
   campaignId: string;
   eventType: 'view' | 'click' | 'cta';
   timestamp: string;
+  domain?: string;
   metadata?: any;
 }

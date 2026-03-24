@@ -129,7 +129,13 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <StatCard title="Active Domains" value={domains.length} icon={Globe} color="blue" />
+          <StatCard 
+            title="Domains Registered" 
+            value={`${domains.length} / 10`} 
+            icon={Globe} 
+            color="blue" 
+            subtitle="Pro Plan Limit: 10 Domains"
+          />
           <StatCard title="Total Campaigns" value={campaigns.length} icon={ImageIcon} color="indigo" />
           <StatCard title="Total Engagement" value="2.4k" icon={BarChart3} color="emerald" />
         </div>
@@ -330,7 +336,7 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, color }: { title: string, value: any, icon: any, color: string }) {
+function StatCard({ title, value, icon: Icon, color, subtitle }: { title: string, value: any, icon: any, color: string, subtitle?: string }) {
   const colors: any = {
     blue: 'bg-blue-50 text-blue-600',
     indigo: 'bg-indigo-50 text-indigo-600',
@@ -346,6 +352,7 @@ function StatCard({ title, value, icon: Icon, color }: { title: string, value: a
         <span className="text-sm font-bold uppercase tracking-widest text-slate-400">{title}</span>
       </div>
       <div className="text-4xl font-black text-slate-900">{value}</div>
+      {subtitle && <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">{subtitle}</p>}
     </div>
   );
 }

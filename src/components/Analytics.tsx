@@ -170,8 +170,48 @@ export default function Analytics() {
             </div>
           </div>
 
-          {/* Recent Leads Section */}
+          {/* Top Domains Section */}
           <div className="lg:col-span-1 bg-white border border-slate-200 p-8 rounded-[2.5rem] shadow-xl shadow-blue-100/50">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <Globe className="w-5 h-5 text-blue-600" /> Top Domains
+              </h3>
+            </div>
+            <div className="space-y-6">
+              {Object.entries(
+                events.filter(e => e.eventType === 'view').reduce((acc: any, e) => {
+                  const domain = e.domain || 'Direct/Unknown';
+                  acc[domain] = (acc[domain] || 0) + 1;
+                  return acc;
+                }, {})
+              )
+                .sort((a: any, b: any) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([domain, count]: any) => (
+                  <div key={domain}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-bold text-slate-700 truncate pr-4">{domain}</span>
+                      <span className="text-xs font-black text-blue-600">{count} views</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(count / views) * 100}%` }}
+                        className="h-full bg-blue-500 rounded-full"
+                      />
+                    </div>
+                  </div>
+                ))}
+              {events.filter(e => e.eventType === 'view').length === 0 && (
+                <div className="text-center py-10 text-slate-400 text-sm font-medium">No domain data yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          {/* Recent Leads Section */}
+          <div className="lg:col-span-3 bg-white border border-slate-200 p-8 rounded-[2.5rem] shadow-xl shadow-blue-100/50">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-xl font-black text-slate-900">Recent Leads</h3>
               <button className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
