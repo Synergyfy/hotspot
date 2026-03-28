@@ -8,6 +8,7 @@ import CampaignEditor from './components/CampaignEditor';
 import Analytics from './components/Analytics';
 import HotspotRenderer from './components/HotspotRenderer';
 import DomainManagement from './components/DomainManagement';
+import LeadsManager from './components/LeadsManager';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
         <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
         <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
+        <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
         <Route path="/embed/:id" element={<HotspotRenderer />} />
       </Routes>
     </BrowserRouter>

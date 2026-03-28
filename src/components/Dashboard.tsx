@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Campaign, Domain } from '../types';
-import { Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload, Link as LinkIcon } from 'lucide-react';
+import { Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload, Link as LinkIcon, Users } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -108,6 +108,9 @@ export default function Dashboard() {
               <Link to="/domains" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors">
                 Domains
               </Link>
+              <Link to="/leads" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors">
+                Leads
+              </Link>
               <button 
                 onClick={signOut}
                 className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
@@ -137,7 +140,7 @@ export default function Dashboard() {
             subtitle="Pro Plan Limit: 10 Domains"
           />
           <StatCard title="Total Campaigns" value={campaigns.length} icon={ImageIcon} color="indigo" />
-          <StatCard title="Total Engagement" value="2.4k" icon={BarChart3} color="emerald" />
+          <StatCard title="Total Leads" value={storage.get('leads').length} icon={Users} color="emerald" subtitle="Captured from Forms" />
         </div>
 
         <div className="flex justify-between items-end mb-8">

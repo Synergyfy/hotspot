@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Stage, Layer, Image as KonvaImage, Circle, Rect, Transformer, Group } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Circle, Rect, Transformer, Group, Text as KonvaText } from 'react-konva';
 import Konva from 'konva';
 import useImage from 'use-image';
 import { Campaign, Hotspot, HotspotType, FormField } from '../types';
@@ -11,7 +11,7 @@ import {
   Smartphone, Music, ShieldCheck, X, Upload, Globe, Search, Info, ExternalLink, 
   Phone, CheckCircle, ArrowRight, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, 
-  ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft
+  ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft, Minus, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -76,19 +76,23 @@ export default function CampaignEditor() {
   const [filterScope, setFilterScope] = useState<'global' | 'hotspot'>('global');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scale, setScale] = useState(1);
   const [image] = useImage(campaign?.imageUrl || '', 'anonymous');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showEmbedModal, setShowEmbedModal] = useState(false);
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const stageRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
 
   useEffect(() => {
     if (!id) return;
-    const allCampaigns = storage.get('campaigns');
-    const found = allCampaigns.find((c: any) => c.id === id);
+    const campaignsFromStorage = storage.get('campaigns');
+    setAllCampaigns(campaignsFromStorage);
+    
+    const found = campaignsFromStorage.find((c: any) => c.id === id);
     if (!found) { navigate('/'); return; }
     setCampaign(found);
     setHotspots(found.hotspots || []);
@@ -176,7 +180,13 @@ export default function CampaignEditor() {
     }
   };
 
-  const handleSaveAndPreview = async () => { await saveCampaign(); window.open(`/embed/${id}`, '_blank'); };
+  const handleSaveAndPreview = async () => { 
+    await saveCampaign(); 
+    // Small delay to ensure state is set before navigating/opening
+    setTimeout(() => {
+      window.open(`/embed/${id}`, '_blank');
+    }, 100);
+  };
   const embedCode = `<iframe src="${window.location.origin}/embed/${id}" width="100%" height="600" frameborder="0"></iframe>`;
 
   if (loading) return (
@@ -230,26 +240,46 @@ export default function CampaignEditor() {
         <main className="flex-1 relative bg-slate-100 overflow-hidden flex items-center justify-center p-24 mt-8">
           <div className="absolute top-8 right-8 flex flex-col gap-2 z-20">
             <button onClick={() => setScale(s => s * 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Plus className="w-5 h-5" /></button>
-            <button onClick={() => setScale(s => s / 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><X className="w-5 h-5 rotate-45" /></button>
+            <button onClick={() => setScale(s => s / 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Minus className="w-5 h-5" /></button>
             <button onClick={() => { setScale(1); if (stageRef.current) stageRef.current.position({ x: 0, y: 0 }); }} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600 text-[10px] font-black">100%</button>
           </div>
 
           <div className="relative shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] bg-white">
             {image && (
               <div className="relative">
-                {/* Image Wrapper to keep rounded corners without clipping the preview cards */}
+                {/* Image Wrapper for Konva Stage */}
                 <div className="rounded-3xl overflow-hidden relative">
-                  <Stage width={image.width} height={image.height} onClick={handleStageClick} scaleX={scale} scaleY={scale} ref={stageRef} draggable>
+                  <Stage width={image.width} height={image.height} 
+                    onClick={handleStageClick} 
+                    scaleX={scale} scaleY={scale} 
+                    ref={stageRef} 
+                    draggable
+                    x={stagePos.x}
+                    y={stagePos.y}
+                    onDragEnd={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
+                    onDragMove={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
+                  >
                     <Layer>
                       <KonvaImage image={image} ref={imageRef} filters={konvaFilters} {...filters} name="background-image" />
-                      {hotspots.map((h) => (
-                        <HotspotMarker key={h.id} hotspot={h} isSelected={h.id === selectedId}
-                          onSelect={() => { setSelectedId(h.id); setActiveTab(filterScope === 'hotspot' ? 'filters' : 'properties'); }}
-                          onHover={() => setHoveredId(h.id)} onUnhover={() => setHoveredId(null)}
-                          onChange={(newAttrs: any) => updateHotspot(h.id, newAttrs)} image={image} />
-                      ))}
                     </Layer>
                   </Stage>
+                </div>
+
+                {/* HTML Markers Overlay */}
+                <div className="absolute inset-0 pointer-events-none overflow-visible">
+                  {hotspots.map((h) => (
+                    <EditorHotspotMarker 
+                      key={h.id} 
+                      hotspot={h} 
+                      isSelected={h.id === selectedId}
+                      scale={scale}
+                      stagePos={stagePos}
+                      onSelect={() => { setSelectedId(h.id); setActiveTab(filterScope === 'hotspot' ? 'filters' : 'properties'); }}
+                      onHover={() => setHoveredId(h.id)} 
+                      onUnhover={() => setHoveredId(null)}
+                      onChange={(newPos: any) => updateHotspot(h.id, newPos)}
+                    />
+                  ))}
                 </div>
 
                 {/* Live Preview on Hover - Smart Positioning */}
@@ -260,12 +290,12 @@ export default function CampaignEditor() {
                       initial={{ opacity: 0, scale: 0.9 }} 
                       animate={{ opacity: 1, scale: 1 }} 
                       exit={{ opacity: 0, scale: 0.9 }}
-                      className="absolute z-[99999] pointer-events-none"
+                      className="absolute z-[99999] pointer-events-auto"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
                       style={{ 
-                        left: (activePreviewHotspot.x * scale > (image.width * scale) / 2)
-                          ? `${(activePreviewHotspot.x * scale) - 20}px` 
-                          : `${(activePreviewHotspot.x * scale) + 20}px`, 
-                        top: `${activePreviewHotspot.y * scale}px`,
+                        left: `${(activePreviewHotspot.x * scale) + stagePos.x + (activePreviewHotspot.x * scale > (image.width * scale) / 2 ? -20 : 20)}px`, 
+                        top: `${(activePreviewHotspot.y * scale) + stagePos.y}px`,
                         transform: `translate(${ (activePreviewHotspot.x * scale > (image.width * scale) / 2) ? '-100%' : '0' }, -50%)`
                       }}
                     >
@@ -325,13 +355,26 @@ export default function CampaignEditor() {
                   </div>
 
                   {/* Trigger */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Trigger Type</label>
-                    <div className="flex bg-slate-50 p-1 rounded-2xl">
-                      <button onClick={() => updateHotspot(selectedHotspot.id, { triggerType: 'click' })}
-                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.triggerType === 'click' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Click</button>
-                      <button onClick={() => updateHotspot(selectedHotspot.id, { triggerType: 'hover' })}
-                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.triggerType === 'hover' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Hover</button>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Trigger</label>
+                      <div className="flex bg-slate-50 p-1 rounded-2xl">
+                        <button onClick={() => updateHotspot(selectedHotspot.id, { triggerType: 'click' })}
+                          className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.triggerType === 'click' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Click</button>
+                        <button onClick={() => updateHotspot(selectedHotspot.id, { triggerType: 'hover' })}
+                          className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.triggerType === 'hover' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Hover</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Motion</label>
+                      <select value={selectedHotspot.animationType || 'pulse'} onChange={e => updateHotspot(selectedHotspot.id, { animationType: e.target.value as any })}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-[10px] uppercase tracking-wider">
+                        <option value="none">None</option>
+                        <option value="pulse">Pulse</option>
+                        <option value="ping">Ping</option>
+                        <option value="bounce">Bounce</option>
+                        <option value="float">Float</option>
+                      </select>
                     </div>
                   </div>
 
@@ -410,11 +453,12 @@ export default function CampaignEditor() {
                             <div className="flex bg-slate-50 p-1 rounded-2xl">
                               {[
                                 { id: 'url', label: 'Link', icon: Globe },
+                                { id: 'scene', label: 'Scene', icon: ImageIcon },
                                 { id: 'email', label: 'Email', icon: Mail },
                                 { id: 'phone', label: 'Call', icon: Phone },
                               ].map(action => (
                                 <button key={action.id} 
-                                  onClick={() => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, type: action.id as any } })}
+                                  onClick={() => updateHotspot(selectedHotspot.id, { action: { type: action.id as any, value: '' } })}
                                   className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.action.type === action.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                                   <action.icon className="w-3 h-3" /> {action.label}
                                 </button>
@@ -422,12 +466,28 @@ export default function CampaignEditor() {
                             </div>
                           </div>
                           
-                          <InputField 
-                            label={selectedHotspot.action.type === 'email' ? 'Email Address' : selectedHotspot.action.type === 'phone' ? 'Phone Number' : 'Action URL'} 
-                            value={selectedHotspot.action.value} 
-                            onChange={v => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: v } })} 
-                            placeholder={selectedHotspot.action.type === 'email' ? 'hello@example.com' : selectedHotspot.action.type === 'phone' ? '+1234567890' : 'https://...'} 
-                          />
+                          {selectedHotspot.action.type === 'scene' ? (
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Target Scene</label>
+                              <select 
+                                value={selectedHotspot.action.value} 
+                                onChange={e => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: e.target.value } })}
+                                className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                              >
+                                <option value="">Select Destination Scene</option>
+                                {allCampaigns.filter(c => c.id !== id).map(c => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <InputField 
+                              label={selectedHotspot.action.type === 'email' ? 'Email Address' : selectedHotspot.action.type === 'phone' ? 'Phone Number' : 'Action URL'} 
+                              value={selectedHotspot.action.value} 
+                              onChange={v => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: v } })} 
+                              placeholder={selectedHotspot.action.type === 'email' ? 'hello@example.com' : selectedHotspot.action.type === 'phone' ? '+1234567890' : 'https://...'} 
+                            />
+                          )}
                         </div>
                       </>
                     )}
@@ -500,7 +560,7 @@ function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
   if (hotspot.type === 'video') {
     return (
       <div className="w-72 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 p-2">
-        <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative">
+        <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden">
           {hotspot.videoUrl ? (
             <video src={hotspot.videoUrl} className="w-full h-full object-cover rounded-2xl" />
           ) : (
@@ -512,6 +572,12 @@ function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
         </div>
         <div className="p-4">
           <h4 className="font-black text-slate-900 text-xs truncate">{hotspot.title}</h4>
+          {hotspot.description && <p className="text-slate-400 text-[10px] mt-1 line-clamp-2 font-medium">{hotspot.description}</p>}
+          {hotspot.ctaText && (
+            <button className="w-full mt-3 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">
+              {hotspot.ctaText}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -564,29 +630,85 @@ function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
   );
 }
 
-/* ─── Hotspot Marker (Canvas) ─── */
-function HotspotMarker({ hotspot, isSelected, onSelect, onHover, onUnhover, onChange }: any) {
-  const shapeRef = useRef<any>(null);
-  const trRef = useRef<any>(null);
+/* ─── Editor Hotspot Marker (HTML) ─── */
+function EditorHotspotMarker({ hotspot, isSelected, scale, stagePos, onSelect, onHover, onUnhover, onChange }: any) {
   const size = hotspot.width || 12;
   const cornerRadius = (size * (hotspot.roundness || 100)) / 100;
+  const HotspotIcon = hotspot.iconName ? (ICON_LIBRARY.find(i => i.name === hotspot.iconName)?.icon || Info) : null;
+  const animType = hotspot.animationType || 'pulse';
 
-  useEffect(() => {
-    if (isSelected) { trRef.current?.nodes([shapeRef.current]); trRef.current?.getLayer().batchDraw(); }
-  }, [isSelected]);
-
+  // Use Framer Motion for dragging in the editor
   return (
-    <Group onMouseEnter={onHover} onMouseLeave={onUnhover} onClick={onSelect}>
-      {hotspot.pulseAnimation !== false && (
-        <Rect x={hotspot.x} y={hotspot.y} width={size * 2.5} height={size * 2.5} offsetX={size * 1.25} offsetY={size * 1.25}
-          fill={hotspot.backgroundColor || '#2563eb'} opacity={0.2} listening={false} cornerRadius={cornerRadius * 1.25} />
+    <motion.div 
+      drag
+      dragMomentum={false}
+      onDragStart={onSelect}
+      onTap={onSelect}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onDragEnd={(_e, info) => {
+        // Convert the screen delta to stage coordinates
+        const newX = hotspot.x + (info.offset.x / scale);
+        const newY = hotspot.y + (info.offset.y / scale);
+        onChange({ x: newX, y: newY });
+      }}
+      className="absolute flex items-center justify-center group pointer-events-auto"
+      onMouseEnter={onHover}
+      onMouseLeave={onUnhover}
+      style={{ 
+        left: `${(hotspot.x * scale) + stagePos.x}px`, 
+        top: `${(hotspot.y * scale) + stagePos.y}px`, 
+        // Larger invisible hit area (min 40px)
+        width: `${Math.max(40, size * 4 * scale)}px`, 
+        height: `${Math.max(40, size * 4 * scale)}px`, 
+        transform: 'translate(-50%, -50%)',
+        cursor: isSelected ? 'grabbing' : 'grab',
+        zIndex: isSelected ? 100 : 10
+      }}
+    >
+      {/* Visual Animation Rings */}
+      {animType === 'ping' && (
+        <div className="absolute inset-0 animate-ping opacity-30"
+          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25 * scale}px` }} />
       )}
-      <Rect ref={shapeRef} x={hotspot.x} y={hotspot.y} width={size * 2} height={size * 2} offsetX={size} offsetY={size}
-        cornerRadius={cornerRadius} fill={hotspot.backgroundColor || '#2563eb'}
-        stroke={isSelected ? '#ffffff' : (hotspot.iconColor || '#ffffff')} strokeWidth={3}
-        draggable onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-        shadowBlur={10} shadowColor="rgba(0,0,0,0.2)" />
-    </Group>
+      
+      {animType === 'pulse' && (
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="absolute inset-0"
+          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25 * scale}px` }} />
+      )}
+
+      {/* Main Marker Body */}
+      <motion.div 
+        className={`relative flex items-center justify-center shadow-lg border-2 ${isSelected ? 'border-red-500 scale-110' : 'border-white'}`}
+        style={{ 
+          width: `${size * 2 * scale}px`, 
+          height: `${size * 2 * scale}px`, 
+          backgroundColor: hotspot.backgroundColor || '#2563eb', 
+          color: hotspot.iconColor || '#ffffff', 
+          borderRadius: `${cornerRadius * scale}px` 
+        }}
+        animate={
+          animType === 'bounce' ? { y: [0, -10, 0] } : 
+          animType === 'float' ? { y: [0, -5, 0], x: [0, 2, -2, 0] } : {}
+        }
+        transition={
+          animType === 'bounce' ? { repeat: Infinity, duration: 1, ease: "easeInOut" } : 
+          animType === 'float' ? { repeat: Infinity, duration: 3, ease: "easeInOut" } : {}
+        }
+      >
+        {HotspotIcon ? (
+           <HotspotIcon style={{ width: `${size * scale}px`, height: `${size * scale}px` }} />
+        ) : (
+           <div className="font-black" style={{ fontSize: `${size * 0.8 * scale}px` }}>
+             {hotspot.type === 'product' ? <ShoppingCart className="w-full h-full" /> : <Info className="w-full h-full" />}
+           </div>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
