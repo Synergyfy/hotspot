@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalyticsEvent, Lead, Campaign } from '../types';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { ArrowLeft, Users, MousePointer2, TrendingUp, Download, Calendar, Mail, ExternalLink, Filter } from 'lucide-react';
+import { ArrowLeft, Users, MousePointer2, TrendingUp, Download, Calendar, Mail, ExternalLink, Filter, Globe } from 'lucide-react';
 import { motion } from 'motion/react';
 
 // Mock Data Storage Helper
