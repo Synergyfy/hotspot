@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String?
+  campaigns Campaign[]
+  domains   Domain[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Campaign {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  name        String
+  imageUrl    String
+  watermarkUrl String?
+  soundUrl    String?
+  filters     Json?
+  user        User     @relation(fields: [userId], references: [id])
+  hotspots    Hotspot[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  analytics   AnalyticsEvent[]
+  leads       Lead[]
+}
+
+model Hotspot {
+  id              Int      @id @default(autoincrement())
+  campaignId      Int
+  campaign        Campaign @relation(fields: [campaignId], references: [id])
+  type            String
+  x               Float
+  y               Float
+  width           Float?
+  height          Float?
+  title           String
+  description     String?
+  price           String?
+  ctaText         String?
+  imageUrl        String?
+  videoUrl        String?
+  redirectUrl     String?
+  actionType      String   // url, email, etc.
+  actionValue     String
+  config          Json?    // For roundness, pulseAnimation, etc.
+  filters         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Lead {
+  id          Int      @id @default(autoincrement())
+  campaignId  Int
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  email       String
+  name        String?
+  ip          String?
+  data        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([campaignId, email])
+}
+
+model Domain {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  name      String   @unique
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id          Int      @id @default(autoincrement())
+  campaignId  Int
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  eventType   String   // view, click, cta
+  timestamp   DateTime @default(now())
+  domain      String?
+  metadata    Json?
+}
