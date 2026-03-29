@@ -87,15 +87,29 @@ let CampaignsService = class CampaignsService {
             throw new common_1.NotFoundException('Campaign not found');
         if (campaign.userId !== userId)
             throw new common_1.ForbiddenException('Unauthorized');
-        const { hotspots, ...campaignData } = data;
-        await this.prisma.hotspot.deleteMany({ where: { campaignId: id } });
+        const { hotspots = [], ...campaignData } = data;
+        const existingHotspots = hotspots.filter((h) => Number.isInteger(h.id) && h.id > 0);
+        const newHotspots = hotspots.filter((h) => !(Number.isInteger(h.id) && h.id > 0));
+        const incomingIds = existingHotspots.map((h) => h.id);
+        await this.prisma.hotspot.deleteMany({
+            where: { campaignId: id, id: { notIn: incomingIds } },
+        });
+        await Promise.all(existingHotspots.map((h) => {
+            const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
+            return this.prisma.hotspot.update({
+                where: { id: h.id },
+                data: hotspotData,
+            });
+        }));
         const result = await this.prisma.campaign.update({
             where: { id },
             data: {
                 ...campaignData,
-                hotspots: {
-                    create: (hotspots || []).map(toDbHotspot),
-                },
+                ...(newHotspots.length > 0 && {
+                    hotspots: {
+                        create: newHotspots.map(toDbHotspot),
+                    },
+                }),
             },
             include: { hotspots: true },
         });
