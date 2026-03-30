@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lead, Campaign } from '../types';
 import { Download, Search, Mail, Calendar, Tag, Trash2, ArrowLeft, X, User, FileText, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
