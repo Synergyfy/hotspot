@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Lead, Campaign } from '../types';
-import { Download, Search, Mail, Calendar, Tag, Trash2, ArrowLeft } from 'lucide-react';
+import { Download, Search, Mail, Calendar, Tag, Trash2, ArrowLeft, X, User, FileText, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 
 const storage = {
   get: (key: string) => JSON.parse(localStorage.getItem(key) || '[]'),
@@ -13,6 +14,7 @@ export default function LeadsManager() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -124,10 +126,13 @@ export default function LeadsManager() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <tr key={lead.id} 
+                    onClick={() => setSelectedLead(lead)}
+                    className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                  >
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold">
+                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold group-hover:bg-blue-600 group-hover:text-white transition-all">
                           {(lead.name || lead.email || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -149,12 +154,15 @@ export default function LeadsManager() {
                       </div>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button 
-                        onClick={() => deleteLead(lead.id)}
-                        className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }}
+                          className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -173,6 +181,91 @@ export default function LeadsManager() {
           )}
         </div>
       </main>
+
+      <AnimatePresence>
+        {selectedLead && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedLead(null)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 leading-tight">Lead Details</h2>
+                    <p className="text-sm text-slate-500 font-medium">Captured from {getCampaignName(selectedLead.campaignId)}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedLead(null)}
+                  className="p-2 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-slate-100"
+                >
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-8 overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Email Address</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedLead.email}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Capture Date</p>
+                    <p className="text-sm font-bold text-slate-900">
+                      {new Date(selectedLead.timestamp).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <h3 className="font-black text-slate-900 uppercase tracking-tight text-sm">Form Submissions</h3>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {Object.entries(selectedLead.data || {}).map(([key, value]) => (
+                      <div key={key} className="flex flex-col gap-1 p-4 rounded-2xl border border-slate-100 bg-white hover:border-blue-100 transition-colors">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{key}</span>
+                        <span className="text-sm font-bold text-slate-900">{value}</span>
+                      </div>
+                    ))}
+                    {!selectedLead.data && (
+                      <div className="text-center py-6">
+                        <p className="text-slate-400 text-sm font-medium">No additional form data captured.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 border-t border-slate-100 bg-slate-50/50">
+                <button 
+                  onClick={() => setSelectedLead(null)}
+                  className="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-blue-600 transition-all shadow-lg active:scale-[0.98]"
+                >
+                  Close Details
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

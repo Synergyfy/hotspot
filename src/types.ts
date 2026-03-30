@@ -100,6 +100,7 @@ export interface Lead {
   name: string;
   email: string;
   timestamp: string;
+  data?: Record<string, string>;
 }
 
 export interface AnalyticsEvent {
