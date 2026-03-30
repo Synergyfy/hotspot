@@ -13,6 +13,7 @@ export const leadsApi = {
   findAll: (campaignId?: number | string) =>
     campaignId ? api.get(`/leads?campaignId=${campaignId}`) : api.get('/leads'),
   create: (data: any) => api.post('/leads', data),
+  remove: (id: number | string) => api.delete(`/leads/${id}`),
 };
 
 export const domainsApi = {

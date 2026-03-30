@@ -3,11 +3,8 @@ import { Lead, Campaign } from '../types';
 import { Download, Search, Mail, Calendar, Tag, Trash2, ArrowLeft, X, User, FileText, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-
-const storage = {
-  get: (key: string) => JSON.parse(localStorage.getItem(key) || '[]'),
-  set: (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data)),
-};
+import { leadsApi } from '../api/services';
+import { campaignsApi } from '../api/campaigns';
 
 export default function LeadsManager() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -19,11 +16,21 @@ export default function LeadsManager() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const allLeads = storage.get('leads');
-    const allCampaigns = storage.get('campaigns');
-    setLeads(allLeads);
-    setCampaigns(allCampaigns);
-    setLoading(false);
+    const fetchData = async () => {
+      try {
+        const [leadsRes, campaignsRes] = await Promise.all([
+          leadsApi.findAll(),
+          campaignsApi.findAll()
+        ]);
+        setLeads(leadsRes.data);
+        setCampaigns(campaignsRes.data);
+      } catch (err) {
+        console.error('Failed to fetch leads data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const filteredLeads = leads.filter(lead => {
@@ -33,8 +40,8 @@ export default function LeadsManager() {
     return matchesSearch && matchesCampaign;
   });
 
-  const getCampaignName = (id: string) => {
-    return campaigns.find(c => c.id === id)?.name || 'Unknown Campaign';
+  const getCampaignName = (id: string | number) => {
+    return campaigns.find(c => String(c.id) === String(id))?.name || 'Unknown Campaign';
   };
 
   const exportLeads = () => {
@@ -42,10 +49,10 @@ export default function LeadsManager() {
     const csvContent = [
       headers.join(','),
       ...filteredLeads.map(lead => [
-        `"${lead.name}"`,
+        `"${lead.name || 'Anonymous'}"`,
         `"${lead.email}"`,
         `"${getCampaignName(lead.campaignId)}"`,
-        `"${new Date(lead.timestamp).toLocaleDateString()}"`
+        `"${new Date(lead.createdAt || (lead as any).timestamp).toLocaleDateString()}"`
       ].join(','))
     ].join('\n');
 
@@ -60,10 +67,14 @@ export default function LeadsManager() {
     document.body.removeChild(link);
   };
 
-  const deleteLead = (id: string) => {
-    const updated = leads.filter(l => l.id !== id);
-    storage.set('leads', updated);
-    setLeads(updated);
+  const deleteLead = async (id: string | number) => {
+    if (!window.confirm('Are you sure you want to delete this lead?')) return;
+    try {
+      await leadsApi.remove(id);
+      setLeads(leads.filter(l => l.id !== id));
+    } catch (err) {
+      alert('Failed to delete lead');
+    }
   };
 
   if (loading) return (
@@ -150,7 +161,7 @@ export default function LeadsManager() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
                         <Calendar className="w-4 h-4" />
-                        {new Date(lead.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(lead.createdAt || (lead as any).timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                     </td>
                     <td className="px-8 py-6 text-right">
@@ -225,7 +236,7 @@ export default function LeadsManager() {
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Capture Date</p>
                     <p className="text-sm font-bold text-slate-900">
-                      {new Date(selectedLead.timestamp).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                      {new Date(selectedLead.createdAt || (selectedLead as any).timestamp).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
                 </div>
