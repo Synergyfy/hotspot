@@ -84,10 +84,18 @@ export default function HotspotRenderer() {
     const hs = activeHotspot || hoveredHotspot;
     if (!hs) return;
     const formData = new FormData(e.currentTarget);
+    const data: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      data[key] = value.toString();
+    });
+
     const lead: Lead = {
-      id: Math.random().toString(36).substr(2, 9), campaignId: id,
-      email: formData.get('email') as string || '', name: formData.get('name') as string || formData.get('Name') as string || '',
-      timestamp: new Date().toISOString()
+      id: Math.random().toString(36).substr(2, 9),
+      campaignId: id,
+      email: data.email || data.Email || '',
+      name: data.name || data.Name || 'Anonymous',
+      timestamp: new Date().toISOString(),
+      data
     };
     const allLeads = storage.get('leads');
     storage.set('leads', [...allLeads, lead]);
