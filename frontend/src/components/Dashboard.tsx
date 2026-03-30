@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Campaign, Domain } from '../types';
-import { Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload, Link as LinkIcon, Loader2, Users } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { campaignsApi } from '../api/campaigns';
-import { domainsApi, uploadsApi } from '../api/services';
+import { domainsApi, uploadsApi, leadsApi } from '../api/services';
 
 export default function Dashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [leadsCount, setLeadsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: '', imageUrl: '' });
@@ -20,12 +21,14 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [campaignsRes, domainsRes] = await Promise.all([
+        const [campaignsRes, domainsRes, leadsRes] = await Promise.all([
           campaignsApi.findAll(),
           domainsApi.findAll(),
+          leadsApi.findAll(),
         ]);
         setCampaigns(campaignsRes.data);
         setDomains(domainsRes.data);
+        setLeadsCount(leadsRes.data.length);
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
       } finally {
@@ -106,14 +109,17 @@ export default function Dashboard() {
               <Link to="/domains" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors">
                 Domains
               </Link>
-              <button 
+              <Link to="/leads" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors">
+                Leads
+              </Link>
+              <button
                 onClick={signOut}
                 className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
                 title="Sign Out"
               >
                 <LogOut className="w-5 h-5" />
               </button>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md flex items-center gap-2"
               >
@@ -127,15 +133,15 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <StatCard 
-            title="Domains Registered" 
-            value={`${domains.length} / 10`} 
-            icon={Globe} 
-            color="blue" 
+          <StatCard
+            title="Domains Registered"
+            value={`${domains.length} / 10`}
+            icon={Globe}
+            color="blue"
             subtitle="Pro Plan Limit: 10 Domains"
           />
           <StatCard title="Total Campaigns" value={campaigns.length} icon={ImageIcon} color="indigo" />
-          <StatCard title="Total Engagement" value="--" icon={BarChart3} color="emerald" />
+          <StatCard title="Total Leads" value={leadsCount} icon={Users} color="emerald" subtitle="Captured from Forms" />
         </div>
 
         <div className="flex justify-between items-end mb-8">
@@ -148,7 +154,7 @@ export default function Dashboard() {
         {/* Campaigns Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {campaigns.map((campaign) => (
-            <motion.div 
+            <motion.div
               key={campaign.id}
               layout
               initial={{ opacity: 0, y: 20 }}
@@ -157,8 +163,8 @@ export default function Dashboard() {
               style={{ willChange: 'transform' }}
             >
               <div className="aspect-video relative overflow-hidden bg-slate-100">
-                <img 
-                  src={campaign.imageUrl} 
+                <img
+                  src={campaign.imageUrl}
                   alt={campaign.name}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                   style={{ willChange: 'transform' }}
@@ -166,21 +172,21 @@ export default function Dashboard() {
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                  <Link 
+                  <Link
                     to={`/campaigns/${campaign.id}/edit`}
                     className="p-3 bg-white text-slate-900 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-lg"
                     title="Edit Campaign"
                   >
                     <Settings className="w-5 h-5" />
                   </Link>
-                  <Link 
+                  <Link
                     to={`/campaigns/${campaign.id}/analytics`}
                     className="p-3 bg-white text-slate-900 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-lg"
                     title="View Analytics"
                   >
                     <BarChart3 className="w-5 h-5" />
                   </Link>
-                  <a 
+                  <a
                     href={`/embed/${campaign.id}`}
                     target="_blank"
                     className="p-3 bg-white text-slate-900 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-lg"
@@ -196,7 +202,7 @@ export default function Dashboard() {
                     <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">{campaign.name}</h3>
                     <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-medium">ID: {campaign.id}</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => deleteCampaign(campaign.id)}
                     className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                   >
@@ -206,7 +212,7 @@ export default function Dashboard() {
               </div>
             </motion.div>
           ))}
-          
+
           {campaigns.length === 0 && (
             <div className="col-span-full py-24 text-center bg-white border-2 border-dashed border-slate-200 rounded-3xl">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -214,7 +220,7 @@ export default function Dashboard() {
               </div>
               <h3 className="text-lg font-bold text-slate-900">No campaigns yet</h3>
               <p className="text-slate-500 mb-6 max-w-xs mx-auto">Start by creating your first interactive shoppable image campaign.</p>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(true)}
                 className="text-blue-600 font-bold hover:text-blue-700 transition-colors inline-flex items-center gap-2"
               >
@@ -229,14 +235,14 @@ export default function Dashboard() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -252,11 +258,11 @@ export default function Dashboard() {
                 <form onSubmit={handleCreateCampaign} className="space-y-6">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Campaign Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={newCampaign.name}
-                      onChange={e => setNewCampaign({...newCampaign, name: e.target.value})}
+                      onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
                       placeholder="Summer Collection 2024"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                     />
@@ -282,7 +288,7 @@ export default function Dashboard() {
                     </div>
 
                     {uploadMethod === 'upload' ? (
-                      <div 
+                      <div
                         onClick={() => fileInputRef.current?.click()}
                         className="relative aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all overflow-hidden group"
                       >
@@ -306,8 +312,8 @@ export default function Dashboard() {
                             )}
                           </>
                         )}
-                        <input 
-                          type="file" 
+                        <input
+                          type="file"
                           ref={fileInputRef}
                           onChange={handleFileChange}
                           accept="image/*"
@@ -315,18 +321,18 @@ export default function Dashboard() {
                         />
                       </div>
                     ) : (
-                      <input 
-                        type="url" 
+                      <input
+                        type="url"
                         required={uploadMethod === 'url'}
                         value={newCampaign.imageUrl}
-                        onChange={e => setNewCampaign({...newCampaign, imageUrl: e.target.value})}
+                        onChange={e => setNewCampaign({ ...newCampaign, imageUrl: e.target.value })}
                         placeholder="https://images.unsplash.com/..."
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                       />
                     )}
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={submitting || !newCampaign.name || !newCampaign.imageUrl}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"

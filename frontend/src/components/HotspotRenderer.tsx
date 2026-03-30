@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, Hotspot, AnalyticsEvent, Lead, Domain, FormField } from '../types';
 import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,6 +13,7 @@ const ICON_MAP: Record<string, any> = {
 
 export default function HotspotRenderer() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(null);
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null);
@@ -31,10 +32,10 @@ export default function HotspotRenderer() {
       try {
         const { data: found } = await publicApi.getCampaign(id);
         setCampaign(found);
-        
+
         const referrer = document.referrer ? new URL(document.referrer).hostname : '';
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
+
         if (!isLocal && referrer && localStorage.getItem('token')) {
           try {
             const { data: allDomains } = await domainsApi.findAll();
@@ -47,7 +48,7 @@ export default function HotspotRenderer() {
             console.error('Failed to verify domain', err);
           }
         }
-        
+
         trackEvent(found.id, 'view', undefined, referrer || window.location.hostname);
       } catch (err) {
         console.error('Campaign not found', err);
@@ -83,7 +84,7 @@ export default function HotspotRenderer() {
       setHoveredHotspot(null);
       if (campaign) trackEvent(campaign.id, 'click', hotspot.id);
     }
-    if (campaign?.soundUrl) new Audio(campaign.soundUrl).play().catch(() => {});
+    if (campaign?.soundUrl) new Audio(campaign.soundUrl).play().catch(() => { });
   };
 
   const handleHotspotLeave = () => {
@@ -96,17 +97,22 @@ export default function HotspotRenderer() {
     const hs = activeHotspot || hoveredHotspot;
     if (!hs) return;
     const formData = new FormData(e.currentTarget);
-    
+    const data: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      data[key] = value.toString();
+    });
+
     try {
       await leadsApi.create({
         campaignId: +id,
-        email: formData.get('email') as string || '',
-        name: formData.get('name') as string || formData.get('Name') as string || '',
+        email: data.email || data.Email || '',
+        name: data.name || data.Name || 'Anonymous',
+        data
       });
-      
+
       setLeadCaptured(true);
       trackEvent(campaign.id, 'cta', hs.id);
-      
+
       if (hs.redirectUrl) {
         setTimeout(() => { window.location.href = hs.redirectUrl!; }, 1500);
       } else {
@@ -124,6 +130,7 @@ export default function HotspotRenderer() {
     else if (type === 'email') window.location.href = `mailto:${value}`;
     else if (type === 'phone') window.location.href = `tel:${value}`;
     else if (type === 'video') window.open(value, '_blank');
+    else if (type === 'scene') navigate(`/embed/${value}`);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -164,10 +171,10 @@ export default function HotspotRenderer() {
       */}
       <div className="relative inline-block shadow-2xl transition-transform duration-75 ease-out"
         style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}>
-        
+
         {/* Wrapper for image and built-in filters to keep rounded corners without clipping hotspots */}
         <div className="rounded-[2.5rem] overflow-hidden relative">
-          <img src={campaign.imageUrl} alt={campaign.name} className="max-w-full max-h-screen object-contain" style={{ filter: getFilterString(campaign.filters) }} referrerPolicy="no-referrer" />
+          <img src={campaign.imageUrl} alt={campaign.name} className="block" style={{ filter: getFilterString(campaign.filters) }} referrerPolicy="no-referrer" />
 
           {/* Radius Effects */}
           {campaign.hotspots?.filter(h => h.radius && h.radius > 0).map(h => {
@@ -176,7 +183,7 @@ export default function HotspotRenderer() {
             return (
               <div key={`r-${h.id}`} className="absolute inset-0 pointer-events-none"
                 style={{ clipPath: `circle(${h.radius}px at ${h.x}px ${h.y}px)` }}>
-                <img src={campaign.imageUrl} alt="" className="w-full h-full object-contain" style={{ filter: hf }} referrerPolicy="no-referrer" />
+                <img src={campaign.imageUrl} alt="" className="block" style={{ filter: hf }} referrerPolicy="no-referrer" />
               </div>
             );
           })}
@@ -193,6 +200,7 @@ export default function HotspotRenderer() {
             const cornerRadius = (size * (h.roundness || 100)) / 100;
             const isHover = h.triggerType === 'hover';
             const HotspotIcon = h.iconName ? (ICON_MAP[h.iconName] || Info) : null;
+            const animType = h.animationType || ((h as any).pulseAnimation === false ? 'none' : 'pulse');
 
             return (
               <button key={h.id}
@@ -201,14 +209,36 @@ export default function HotspotRenderer() {
                 onMouseLeave={() => isHover && handleHotspotLeave()}
                 className="absolute flex items-center justify-center group transition-transform duration-75 ease-out"
                 style={{ left: `${h.x}px`, top: `${h.y}px`, width: `${size * 2.5}px`, height: `${size * 2.5}px`, transform: 'translate(-50%, -50%)' }}>
-                {h.pulseAnimation !== false && (
-                  <div className="absolute inset-0 animate-ping opacity-20 group-hover:opacity-40 transition-opacity"
+
+                {/* Animations */}
+                {animType === 'ping' && (
+                  <div className="absolute inset-0 animate-ping opacity-30"
                     style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25}px` }} />
                 )}
-                <div className="relative flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg border-2 border-white"
-                  style={{ width: `${size * 2}px`, height: `${size * 2}px`, backgroundColor: h.backgroundColor || '#2563eb', color: h.iconColor || '#ffffff', borderRadius: `${cornerRadius}px` }}>
+
+                {animType === 'pulse' && (
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="absolute inset-0"
+                    style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25}px` }} />
+                )}
+
+                <motion.div
+                  className="relative flex items-center justify-center shadow-lg border-2 border-white"
+                  style={{ width: `${size * 2}px`, height: `${size * 2}px`, backgroundColor: h.backgroundColor || '#2563eb', color: h.iconColor || '#ffffff', borderRadius: `${cornerRadius}px` }}
+                  animate={
+                    animType === 'bounce' ? { y: [0, -10, 0] } :
+                      animType === 'float' ? { y: [0, -5, 0], x: [0, 2, -2, 0] } : {}
+                  }
+                  transition={
+                    animType === 'bounce' ? { repeat: Infinity, duration: 1, ease: "easeInOut" } :
+                      animType === 'float' ? { repeat: Infinity, duration: 3, ease: "easeInOut" } : {}
+                  }
+                  whileHover={{ scale: 1.1 }}
+                >
                   {HotspotIcon ? <HotspotIcon className="w-3 h-3" /> : <DefaultIcon type={h.type} />}
-                </div>
+                </motion.div>
                 {/* Title Tooltip */}
                 <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all pointer-events-none translate-y-2 group-hover:translate-y-0 z-10">
                   <div className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl">{h.title}</div>
@@ -222,22 +252,22 @@ export default function HotspotRenderer() {
         {/* Hover Inline Preview Cards - Smart Positioning Logic */}
         <AnimatePresence>
           {hoveredHotspot && !activeHotspot && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, x: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? 10 : -10 }} 
-              animate={{ opacity: 1, scale: 1, x: 0 }} 
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, x: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? 10 : -10 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }} 
+              transition={{ duration: 0.2 }}
               onMouseEnter={clearHoverTimeout}
               onMouseLeave={handleHotspotLeave}
               className="absolute z-[99999] pointer-events-auto"
-              style={{ 
+              style={{
                 // Determine if we should show card on left or right of the hotspot
-                left: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) 
-                  ? `${hoveredHotspot.x - 30}px` 
-                  : `${hoveredHotspot.x + 30}px`, 
-                top: `${hoveredHotspot.y}px`, 
+                left: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2)
+                  ? `${hoveredHotspot.x - 30}px`
+                  : `${hoveredHotspot.x + 30}px`,
+                top: `${hoveredHotspot.y}px`,
                 transformOrigin: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? 'right' : 'left',
-                transform: `translate(${ (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? '-100%' : '0' }, -50%)` 
+                transform: `translate(${(hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? '-100%' : '0'}, -50%)`
               }}>
               <InlineCard hotspot={hoveredHotspot} onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} />
             </motion.div>
@@ -297,7 +327,7 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Ho
           <div className="flex items-start justify-between gap-2 mb-1">
             <h4 className="font-black text-slate-900 leading-tight truncate text-sm">{hotspot.title}</h4>
             <div className="flex items-center gap-0.5 text-amber-400 shrink-0">
-              {[1,2,3,4,5].map(i => <Star key={i} className="w-3 h-3 fill-current" />)}
+              {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-3 h-3 fill-current" />)}
             </div>
           </div>
           {hotspot.description && <p className="text-slate-400 text-[10px] mb-4 line-clamp-2 leading-relaxed">{hotspot.description}</p>}
@@ -330,6 +360,11 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Ho
         <div className="p-4">
           <h4 className="font-black text-slate-900 text-xs truncate">{hotspot.title}</h4>
           {hotspot.description && <p className="text-slate-400 text-[10px] mt-1 line-clamp-2">{hotspot.description}</p>}
+          {hotspot.ctaText && (
+            <button onClick={() => onAction(hotspot)} className="w-full mt-3 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-600 transition-all">
+              {hotspot.ctaText}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -412,7 +447,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
           <button className="absolute top-4 left-4 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm text-slate-400 hover:text-red-500 transition-colors"><Heart className="w-4 h-4" /></button>
         </div>
         <div className="p-8">
-          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}<span className="text-slate-400 text-[10px] font-bold ml-1">(128)</span></div>
+          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}<span className="text-slate-400 text-[10px] font-bold ml-1">(128)</span></div>
           <div className="flex justify-between items-baseline mb-2">
             <h3 className="text-2xl font-black text-slate-900">{hotspot.title}</h3>
             {hotspot.price && <span className="text-xl font-black text-blue-600">{hotspot.currency || '$'}{hotspot.price}</span>}
@@ -439,7 +474,12 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
         </div>
         <div className="p-6">
           <h3 className="text-xl font-black text-slate-900 mb-1">{hotspot.title}</h3>
-          {hotspot.description && <p className="text-slate-500 text-sm">{hotspot.description}</p>}
+          {hotspot.description && <p className="text-slate-500 text-sm mb-4">{hotspot.description}</p>}
+          {hotspot.ctaText && (
+            <button onClick={() => onAction(hotspot)} className="w-full bg-slate-900 text-white font-black py-3 rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+              {hotspot.ctaText}
+            </button>
+          )}
         </div>
       </>
     );

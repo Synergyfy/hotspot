@@ -34,7 +34,7 @@ export interface Hotspot {
   backgroundColor?: string;
   iconColor?: string;
   iconName?: string;
-  pulseAnimation?: boolean;
+  animationType?: 'pulse' | 'bounce' | 'ping' | 'float' | 'none';
   triggerType?: 'click' | 'hover';
   roundness?: number;
   redirectUrl?: string;
@@ -43,7 +43,7 @@ export interface Hotspot {
   videoUrl?: string;
   formFields?: FormField[];
   action: {
-    type: 'url' | 'email' | 'phone' | 'video' | 'form';
+    type: 'url' | 'email' | 'phone' | 'video' | 'form' | 'scene';
     value: string;
   };
   radius?: number;
@@ -100,6 +100,7 @@ export interface Lead {
   name: string;
   email: string;
   timestamp: string;
+  data?: Record<string, string>;
 }
 
 export interface AnalyticsEvent {
