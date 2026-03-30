@@ -95,11 +95,12 @@ export interface Domain {
 }
 
 export interface Lead {
-  id: string;
-  campaignId: string;
+  id: string | number;
+  campaignId: string | number;
   name: string;
   email: string;
-  timestamp: string;
+  createdAt: string;
+  timestamp?: string; // For legacy/local data support
   data?: Record<string, string>;
 }
 

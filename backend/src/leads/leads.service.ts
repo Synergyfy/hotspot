@@ -17,4 +17,10 @@ export class LeadsService {
       include: { campaign: true },
     });
   }
+
+  async remove(id: number) {
+    return this.prisma.lead.delete({
+      where: { id },
+    });
+  }
 }
