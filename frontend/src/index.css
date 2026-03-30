@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    /* Improve scroll performance */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Prevent transition-all from re-painting layout properties on scroll */
+  * {
+    /* Use targeted transitions instead of transition-all where possible */
+    backface-visibility: hidden;
+  }
+
+  /* GPU-accelerated scrollable containers */
+  [class*="overflow-y-auto"],
+  [class*="overflow-y-scroll"] {
+    will-change: scroll-position;
+    transform: translateZ(0);
+  }
+
+  /* Reduce blur cost on scroll - only paint when idle */
+  [class*="backdrop-blur"] {
+    transform: translateZ(0);
+    isolation: isolate;
+  }
+
+  /* Pause ping animations during scroll to reduce jank */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-ping,
+    .animate-spin,
+    .animate-bounce,
+    .animate-pulse {
+      animation: none;
+    }
+  }
+
+  /* Contain paint for card-like elements */
+  [class*="rounded-"][class*="shadow-"] {
+    contain: layout style;
+  }
+}
+
