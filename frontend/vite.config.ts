@@ -22,12 +22,12 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Forward all /api requests to the NestJS backend
         '/api': {
-          target: 'http://localhost:3000',
+          target: env.VITE_API_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
         // Forward /uploads so images saved by the backend are visible in the frontend
         '/uploads': {
-          target: 'http://localhost:3000',
+          target: env.VITE_API_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
       },
