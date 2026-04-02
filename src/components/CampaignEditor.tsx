@@ -187,7 +187,8 @@ export default function CampaignEditor() {
       window.open(`/embed/${id}`, '_blank');
     }, 100);
   };
-  const embedCode = `<iframe src="${window.location.origin}/embed/${id}" width="100%" height="600" frameborder="0"></iframe>`;
+  const campaignUrl = `${window.location.origin}/embed/${id}`;
+  const embedCode = `<iframe src="${campaignUrl}" width="100%" height="600" frameborder="0"></iframe>`;
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-slate-50">
@@ -386,6 +387,7 @@ export default function CampaignEditor() {
                     {/* Product Fields */}
                     {selectedHotspot.type === 'product' && (
                       <>
+                        <TextAreaField label="Product Info (Full Specs)" value={selectedHotspot.productInfo || ''} onChange={v => updateHotspot(selectedHotspot.id, { productInfo: v })} />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Currency</label>
@@ -396,7 +398,55 @@ export default function CampaignEditor() {
                           </div>
                           <InputField label="Price" value={selectedHotspot.price || ''} onChange={v => updateHotspot(selectedHotspot.id, { price: v })} placeholder="0.00" />
                         </div>
-                        <FileUploadField label="Product Image" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
+
+                        <div>
+                          <label id="offer-type-label" className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Offer Type</label>
+                          <select aria-labelledby="offer-type-label" value={selectedHotspot.offerType || 'product-first'} onChange={e => updateHotspot(selectedHotspot.id, { offerType: e.target.value as any })}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold">
+                            <option value="product-first">Product-led</option>
+                            <option value="service-first">Service-led</option>
+                            <option value="bundle">Product + Service Bundle</option>
+                          </select>
+                        </div>
+
+                        <FileUploadField label="Main Product Image" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Additional Images</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(selectedHotspot.additionalImages || []).map((img, idx) => (
+                              <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
+                                <img src={img} alt="" className="w-full h-full object-cover" />
+                                <button onClick={() => {
+                                  const images = [...(selectedHotspot.additionalImages || [])];
+                                  images.splice(idx, 1);
+                                  updateHotspot(selectedHotspot.id, { additionalImages: images });
+                                }} className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 hover:bg-white shadow-sm">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.accept = 'image/*';
+                              input.onchange = (e: any) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    const images = [...(selectedHotspot.additionalImages || []), reader.result as string];
+                                    updateHotspot(selectedHotspot.id, { additionalImages: images });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              };
+                              input.click();
+                            }} className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-400 transition-all">
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       </>
                     )}
 
@@ -519,7 +569,7 @@ export default function CampaignEditor() {
         </aside>
       </div>
 
-      <EmbedModal show={showEmbedModal} onClose={() => setShowEmbedModal(false)} code={embedCode} navigate={navigate} />
+      <EmbedModal show={showEmbedModal} onClose={() => setShowEmbedModal(false)} code={embedCode} url={campaignUrl} />
     </div>
   );
 }
@@ -806,19 +856,21 @@ function TypeButton({ active, onClick, icon: Icon, label }: any) {
 }
 
 function InputField({ label, value, onChange, placeholder }: any) {
+  const id = useMemo(() => Math.random().toString(36).substr(2, 9), []);
   return (
     <div>
-      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</label>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold" />
+      <label htmlFor={id} className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</label>
+      <input id={id} type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold" />
     </div>
   );
 }
 
 function TextAreaField({ label, value, onChange }: any) {
+  const id = useMemo(() => Math.random().toString(36).substr(2, 9), []);
   return (
     <div>
-      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</label>
-      <textarea value={value} onChange={e => onChange(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium h-24" />
+      <label htmlFor={id} className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</label>
+      <textarea id={id} value={value} onChange={e => onChange(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium h-24" />
     </div>
   );
 }
@@ -929,15 +981,76 @@ function SettingsPanel({ campaign, setCampaign, storage }: any) {
   );
 }
 
-function EmbedModal({ show, onClose, code, navigate }: any) {
+function EmbedModal({ show, onClose, code, url }: { show: boolean; onClose: () => void; code: string; url: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
   return (
     <AnimatePresence>
       {show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden p-8">
-            <h2 className="text-2xl font-black text-slate-900 mb-6">Embed Code</h2>
-            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 font-mono text-xs text-slate-600 mb-6 break-all">{code}</div>
-            <button onClick={onClose} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl">Close</button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden my-8">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-2xl font-black text-slate-900">Deployment</h2>
+              <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X className="w-6 h-6 text-slate-400" /></button>
+            </div>
+
+            <div className="p-8 space-y-8">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Direct Campaign URL</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 truncate">{url}</div>
+                  <button onClick={() => copyToClipboard(url, 'url')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2">
+                    {copied === 'url' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Embed Code (Iframe)</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 break-all h-24 overflow-y-auto">{code}</div>
+                  <button onClick={() => copyToClipboard(code, 'code')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2 h-fit py-4">
+                    {copied === 'code' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Direct HTML Link</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 truncate">
+                    {`<a href="${url}" target="_blank">View Hotspot Campaign</a>`}
+                  </div>
+                  <button onClick={() => copyToClipboard(`<a href="${url}" target="_blank">View Hotspot Campaign</a>`, 'html')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2">
+                    {copied === 'html' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-3xl p-6 border border-blue-100">
+                <h4 className="font-black text-blue-900 text-sm mb-4 flex items-center gap-2"><Globe className="w-5 h-5" /> Deployment Instructions</h4>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">MCOM Properties</p>
+                    <p className="text-sm text-blue-600">Paste the iframe code into your CMS editor or use the custom HTML component in your page builder.</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">External Websites</p>
+                    <p className="text-sm text-blue-600">Ensure the domain is verified in your <button className="underline font-black" onClick={() => (window.location.href = '/domains')}>Domain Settings</button> before embedding.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-slate-50 border-t border-slate-100">
+              <button onClick={onClose} className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all">Done</button>
+            </div>
           </motion.div>
         </div>
       )}
