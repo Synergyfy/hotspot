@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, Hotspot, AnalyticsEvent, Lead, Domain, FormField } from '../types';
-import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe } from 'lucide-react';
+import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const storage = {
@@ -294,28 +294,39 @@ export default function HotspotRenderer() {
 /* ─── Inline Hover Card ─── */
 function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Hotspot; onAction: (h: Hotspot) => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; leadCaptured: boolean }) {
   if (hotspot.type === 'product') {
+    const isServiceFirst = hotspot.offerType === 'service-first';
+    const isBundle = hotspot.offerType === 'bundle';
+
     return (
       <div className="w-72 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100/80 backdrop-blur-xl">
         <div className="relative aspect-square bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
-          {hotspot.imageUrl ? <img src={hotspot.imageUrl} alt="" className="w-full h-full object-cover" /> :
-            <div className="w-full h-full flex items-center justify-center"><ShoppingCart className="w-16 h-16 text-slate-100" /></div>}
+          <ProductImageGallery images={[hotspot.imageUrl || '', ...(hotspot.additionalImages || [])].filter(Boolean)} />
           {hotspot.price && (
-            <div className="absolute bottom-3 left-3 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-200/50">
+            <div className="absolute bottom-3 left-3 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-200/50 z-10">
               {hotspot.currency || '$'}{hotspot.price}
             </div>
           )}
-          <button className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors shadow-sm">
+          {isBundle && (
+            <div className="absolute top-3 left-3 px-3 py-1 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg z-10">
+              Bundle Deal
+            </div>
+          )}
+          <button className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors shadow-sm z-10">
             <Heart className="w-4 h-4" />
           </button>
         </div>
         <div className="p-5">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h4 className="font-black text-slate-900 leading-tight truncate text-sm">{hotspot.title}</h4>
+            <div>
+              {isServiceFirst && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">Service-Led Offer</span>}
+              <h4 className="font-black text-slate-900 leading-tight truncate text-sm">{hotspot.title}</h4>
+            </div>
             <div className="flex items-center gap-0.5 text-amber-400 shrink-0">
               {[1,2,3,4,5].map(i => <Star key={i} className="w-3 h-3 fill-current" />)}
             </div>
           </div>
-          {hotspot.description && <p className="text-slate-400 text-[10px] mb-4 line-clamp-2 leading-relaxed">{hotspot.description}</p>}
+          {hotspot.description && <p className="text-slate-400 text-[10px] mb-2 line-clamp-2 leading-relaxed">{hotspot.description}</p>}
+          {hotspot.productInfo && <p className="text-slate-500 text-[9px] mb-4 line-clamp-2 font-medium italic border-l-2 border-slate-100 pl-2">{hotspot.productInfo}</p>}
           <button onClick={() => onAction(hotspot)}
             className="w-full py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
             <ShoppingCart className="w-3.5 h-3.5" /> {hotspot.ctaText || 'Add to Cart'}
@@ -421,23 +432,48 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Ho
 /* ─── Full Modal Content ─── */
 function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: any) {
   if (hotspot.type === 'product') {
+    const isServiceFirst = hotspot.offerType === 'service-first';
+    const isBundle = hotspot.offerType === 'bundle';
+
     return (
       <>
         <div className="relative">
           <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
-            {hotspot.imageUrl ? <img src={hotspot.imageUrl} alt="" className="w-full h-full object-cover" /> :
-              <div className="w-full h-full flex items-center justify-center"><ShoppingCart className="w-20 h-20 text-slate-100" /></div>}
+            <ProductImageGallery images={[hotspot.imageUrl || '', ...(hotspot.additionalImages || [])].filter(Boolean)} />
           </div>
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm"><X className="w-4 h-4 text-slate-500" /></button>
-          <button className="absolute top-4 left-4 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm text-slate-400 hover:text-red-500 transition-colors"><Heart className="w-4 h-4" /></button>
+          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm z-10"><X className="w-4 h-4 text-slate-500" /></button>
+          <button className="absolute top-4 left-4 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm text-slate-400 hover:text-red-500 transition-colors z-10"><Heart className="w-4 h-4" /></button>
+          {isBundle && (
+            <div className="absolute bottom-4 left-4 px-4 py-2 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg z-10">
+              Product + Service Bundle
+            </div>
+          )}
         </div>
-        <div className="p-8">
-          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}<span className="text-slate-400 text-[10px] font-bold ml-1">(128)</span></div>
-          <div className="flex justify-between items-baseline mb-2">
-            <h3 className="text-2xl font-black text-slate-900">{hotspot.title}</h3>
+        <div className="p-8 max-h-[60vh] overflow-y-auto">
+          {isServiceFirst && <span className="text-xs font-black text-blue-600 uppercase tracking-[0.2em] block mb-2">Service-Led Experience</span>}
+          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}<span className="text-slate-400 text-[10px] font-bold ml-1">(128 reviews)</span></div>
+          <div className="flex justify-between items-baseline mb-4">
+            <h3 className="text-2xl font-black text-slate-900 leading-tight">{hotspot.title}</h3>
             {hotspot.price && <span className="text-xl font-black text-blue-600">{hotspot.currency || '$'}{hotspot.price}</span>}
           </div>
-          {hotspot.description && <p className="text-slate-500 font-medium mb-6 leading-relaxed text-sm">{hotspot.description}</p>}
+
+          <div className="space-y-6">
+            <div>
+              <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Description</h5>
+              <p className="text-slate-600 font-medium leading-relaxed text-sm">{hotspot.description}</p>
+            </div>
+
+            {hotspot.productInfo && (
+              <div>
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Product Info & Specs</h5>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-slate-600 font-medium leading-relaxed text-xs whitespace-pre-wrap">{hotspot.productInfo}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="p-8 pt-0">
           <button onClick={() => onAction(hotspot)}
             className="w-full bg-gradient-to-r from-slate-900 to-slate-800 hover:from-blue-600 hover:to-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
             <ShoppingCart className="w-4 h-4" /> {hotspot.ctaText || 'Add to Cart'}
@@ -523,6 +559,61 @@ function DynamicField({ field }: { field: FormField }) {
     );
   }
   return <input type={field.type} name={field.label} required={field.required} placeholder={field.placeholder || field.label} className={baseClass} />;
+}
+
+/* ─── Product Image Gallery ─── */
+function ProductImageGallery({ images }: { images: string[] }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  if (images.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-50">
+        <ShoppingCart className="w-16 h-16 text-slate-100" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full group">
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={currentIdx}
+          src={images[currentIdx]}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="w-full h-full object-cover"
+        />
+      </AnimatePresence>
+
+      {images.length > 1 && (
+        <>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+            {images.map((_, i) => (
+              <button
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setCurrentIdx(i); }}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIdx ? 'bg-white w-4' : 'bg-white/50'}`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setCurrentIdx(prev => (prev - 1 + images.length) % images.length); }}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setCurrentIdx(prev => (prev + 1) % images.length); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 /* ─── Icon Helpers ─── */
