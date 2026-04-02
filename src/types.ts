@@ -41,6 +41,9 @@ export interface Hotspot {
   currency?: string;
   imageUrl?: string;
   videoUrl?: string;
+  productInfo?: string;
+  additionalImages?: string[];
+  offerType?: 'product-first' | 'service-first' | 'bundle';
   formFields?: FormField[];
   action: {
     type: 'url' | 'email' | 'phone' | 'video' | 'form' | 'scene';
