@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hotspot_db
+    restart: always
+    environment:
+      POSTGRES_USER: hotspot
+      POSTGRES_PASSWORD: hotspot_password
+      POSTGRES_DB: hotspot_db
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
