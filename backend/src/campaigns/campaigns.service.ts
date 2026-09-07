@@ -83,11 +83,15 @@ export class CampaignsService {
     return campaigns.map(toFrontendCampaign);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, userId?: number) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
       include: { hotspots: true },
     });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (userId !== undefined && campaign.userId !== userId) {
+      throw new NotFoundException('Campaign not found');
+    }
     return toFrontendCampaign(campaign);
   }
 
@@ -103,35 +107,39 @@ export class CampaignsService {
     const newHotspots = hotspots.filter((h: any) => !(Number.isInteger(h.id) && h.id > 0));
     const incomingIds = existingHotspots.map((h: any) => h.id);
 
-    // Delete hotspots that were removed in the editor
-    await this.prisma.hotspot.deleteMany({
-      where: { campaignId: id, id: { notIn: incomingIds } },
-    });
+    // Run all hotspot mutations inside a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Delete hotspots that were removed in the editor
+      await tx.hotspot.deleteMany({
+        where: { campaignId: id, id: { notIn: incomingIds } },
+      });
 
-    // Update each existing hotspot in-place
-    await Promise.all(
-      existingHotspots.map((h: any) => {
-        const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
-        return this.prisma.hotspot.update({
-          where: { id: h.id },
-          data: hotspotData,
-        });
-      }),
-    );
-
-    // Update campaign fields + create brand-new hotspots
-    const result = await this.prisma.campaign.update({
-      where: { id },
-      data: {
-        ...campaignData,
-        ...(newHotspots.length > 0 && {
-          hotspots: {
-            create: newHotspots.map(toDbHotspot),
-          },
+      // Update each existing hotspot in-place
+      await Promise.all(
+        existingHotspots.map((h: any) => {
+          const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
+          return tx.hotspot.update({
+            where: { id: h.id },
+            data: hotspotData,
+          });
         }),
-      },
-      include: { hotspots: true },
+      );
+
+      // Update campaign fields + create brand-new hotspots
+      return tx.campaign.update({
+        where: { id },
+        data: {
+          ...campaignData,
+          ...(newHotspots.length > 0 && {
+            hotspots: {
+              create: newHotspots.map(toDbHotspot),
+            },
+          }),
+        },
+        include: { hotspots: true },
+      });
     });
+
     return toFrontendCampaign(result);
   }
 
@@ -140,10 +148,11 @@ export class CampaignsService {
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Unauthorized');
 
-    await this.prisma.hotspot.deleteMany({ where: { campaignId: id } });
-    await this.prisma.analyticsEvent.deleteMany({ where: { campaignId: id } });
-    await this.prisma.lead.deleteMany({ where: { campaignId: id } });
-
-    return this.prisma.campaign.delete({ where: { id } });
+    await this.prisma.$transaction([
+      this.prisma.hotspot.deleteMany({ where: { campaignId: id } }),
+      this.prisma.analyticsEvent.deleteMany({ where: { campaignId: id } }),
+      this.prisma.lead.deleteMany({ where: { campaignId: id } }),
+      this.prisma.campaign.delete({ where: { id } }),
+    ]);
   }
 }

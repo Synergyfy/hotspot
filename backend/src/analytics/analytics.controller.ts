@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { GetUser } from '../common/decorators/get-user.decorator';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -13,7 +14,7 @@ export class AnalyticsController {
 
   @Get(':campaignId')
   @UseGuards(JwtAuthGuard)
-  getStats(@Param('campaignId') campaignId: string) {
-    return this.analyticsService.getStats(+campaignId);
+  getStats(@Param('campaignId') campaignId: string, @GetUser('userId') userId: number) {
+    return this.analyticsService.getStats(+campaignId, userId);
   }
 }
