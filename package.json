@@ -10,10 +10,7 @@
     "build": "npm run build -w frontend && npm run build -w backend"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "concurrently": "^8.2.2",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12"
+    "concurrently": "^8.2.2"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1"
