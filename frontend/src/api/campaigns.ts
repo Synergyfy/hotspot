@@ -2,6 +2,7 @@ import api from './index';
 
 export const campaignsApi = {
   findAll: () => api.get('/campaigns'),
+  findLight: () => api.get('/campaigns/light'),
   findOne: (id: number | string) => api.get(`/campaigns/${id}`),
   create: (data: any) => api.post('/campaigns', data),
   update: (id: number | string, data: any) => api.patch(`/campaigns/${id}`, data),

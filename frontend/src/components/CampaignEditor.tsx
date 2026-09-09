@@ -7,17 +7,17 @@ import { Campaign, Hotspot, HotspotType, FormField } from '../types';
 import {
   Save, ArrowLeft, Plus, Settings, Trash2, MousePointer2, Type, Play, Mail,
   ShoppingCart, ChevronRight, Layout, Eye, Sliders, Sun, Contrast, Droplets,
-  Palette, Sparkles, Layers, Box, Code, Image as ImageIcon, FileText,
+  Palette, Layers, Box, Code, Image as ImageIcon, FileText,
   Smartphone, Music, ShieldCheck, X, Upload, Globe, Search, Info, ExternalLink,
   Phone, CheckCircle, ArrowRight, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award,
   ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft, Minus, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
 
 import { campaignsApi } from '../api/campaigns';
 import { uploadsApi } from '../api/services';
+import { validateUploadFile } from '../utils/upload';
 
 const ICON_LIBRARY = [
   { name: 'Info', icon: Info },
@@ -72,10 +72,9 @@ export default function CampaignEditor() {
   });
   const [activeTab, setActiveTab] = useState<'properties' | 'filters' | 'settings'>('properties');
   const [filterScope, setFilterScope] = useState<'global' | 'hotspot'>('global');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | number | null>(null);
+  const [allCampaigns, setAllCampaigns] = useState<{ id: number; name: string }[]>([]);
   const [scale, setScale] = useState(1);
   const [image] = useImage(campaign?.imageUrl || '', 'anonymous');
   const [loading, setLoading] = useState(true);
@@ -91,7 +90,7 @@ export default function CampaignEditor() {
       try {
         const [{ data: campaign }, { data: allCamp }] = await Promise.all([
           campaignsApi.findOne(id),
-          campaignsApi.findAll()
+          campaignsApi.findLight()
         ]);
         setCampaign(campaign);
         setAllCampaigns(allCamp);
@@ -139,9 +138,14 @@ export default function CampaignEditor() {
   };
 
   const addHotspot = (x = 100, y = 100) => {
+    // Guard against a React event (or other non-numeric value) leaking in as
+    // coordinates. `onClick={addHotspot}` used to pass the event object as `x`,
+    // which corrupted state and crashed JSON.stringify on save.
+    const safeX = typeof x === 'number' && Number.isFinite(x) ? x : 100;
+    const safeY = typeof y === 'number' && Number.isFinite(y) ? y : 100;
     const newHotspot: Hotspot = {
       id: Math.random().toString(36).substr(2, 9),
-      x, y, type: 'standard', title: 'New Hotspot',
+      x: safeX, y: safeY, type: 'standard', title: 'New Hotspot',
       action: { type: 'url', value: '' }, currency: '$', triggerType: 'hover',
     };
     setHotspots([...hotspots, newHotspot]);
@@ -149,11 +153,11 @@ export default function CampaignEditor() {
     setActiveTab('properties');
   };
 
-  const updateHotspot = (hid: string, updates: Partial<Hotspot>) => {
+  const updateHotspot = (hid: string | number, updates: Partial<Hotspot>) => {
     setHotspots(hotspots.map(h => h.id === hid ? { ...h, ...updates } : h));
   };
 
-  const handleTypeChange = (hid: string, newType: HotspotType) => {
+  const handleTypeChange = (hid: string | number, newType: HotspotType) => {
     const updates: Partial<Hotspot> = { type: newType };
     if (newType === 'signup_form') {
       const h = hotspots.find(x => x.id === hid);
@@ -167,35 +171,60 @@ export default function CampaignEditor() {
     updateHotspot(hid, updates);
   };
 
-  const deleteHotspot = (hid: string) => { setHotspots(hotspots.filter(h => h.id !== hid)); setSelectedId(null); };
+  const deleteHotspot = (hid: string | number) => { setHotspots(hotspots.filter(h => h.id !== hid)); setSelectedId(null); };
 
   const saveCampaign = async () => {
-    if (!campaign || !id) return;
+    if (!campaign || !id) return false;
     setSaving(true);
     try {
-      await campaignsApi.update(id, {
+      const { data } = await campaignsApi.update(id, {
         name: campaign.name,
         hotspots,
         filters,
         watermarkUrl: campaign.watermarkUrl,
         soundUrl: campaign.soundUrl,
       });
+      // Re-sync hotspot ids from the server response. Newly added hotspots are
+      // sent with temporary string ids; the server assigns real numeric ids.
+      // If we don't reconcile them here, every subsequent save would treat them
+      // as brand-new again (delete + recreate), churning ids and losing edits.
+      const savedHotspots = data?.hotspots;
+      if (Array.isArray(savedHotspots)) {
+        // The server returns hotspots in the same relative order we sent them,
+        // with real numeric ids. Remap selection by index so the currently
+        // selected hotspot stays selected after the string→numeric id swap.
+        setHotspots((prev) => {
+          const selIdx = prev.findIndex((p) => p.id === selectedId);
+          const nextSel = selIdx >= 0 ? savedHotspots[selIdx] : null;
+          if (nextSel) setSelectedId(nextSel.id);
+          return savedHotspots;
+        });
+      }
+      return true;
     } catch (err) {
+      console.error('Failed to save campaign', err);
       alert('Failed to save campaign');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFileChange = async (hid: string, field: 'imageUrl' | 'videoUrl', e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (hid: string | number, field: 'imageUrl' | 'videoUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const validationError = validateUploadFile(file);
+      if (validationError) {
+        e.target.value = '';
+        alert(validationError);
+        return;
+      }
       try {
         setSaving(true);
         const { data } = await uploadsApi.upload(file);
         updateHotspot(hid, { [field]: data.url });
-      } catch (err) {
-        alert('Failed to upload asset');
+      } catch (err: any) {
+        alert(err.response?.data?.message || 'Failed to upload asset');
       } finally {
         setSaving(false);
       }
@@ -203,7 +232,8 @@ export default function CampaignEditor() {
   };
 
   const handleSaveAndPreview = async () => {
-    await saveCampaign();
+    const saved = await saveCampaign();
+    if (!saved) return;
     // Small delay to ensure state is set before navigating/opening
     setTimeout(() => {
       window.open(`/embed/${id}`, '_blank');
@@ -241,7 +271,7 @@ export default function CampaignEditor() {
           <button onClick={handleSaveAndPreview} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
             <Eye className="w-4 h-4" /> Preview
           </button>
-          <button onClick={() => saveCampaign().then(() => alert('Campaign saved successfully!'))} disabled={saving} className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] disabled:opacity-50">
+          <button onClick={async () => { if (await saveCampaign()) alert('Campaign saved successfully!'); }} disabled={saving} className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] disabled:opacity-50">
             <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
@@ -252,8 +282,7 @@ export default function CampaignEditor() {
         <aside className="w-20 bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-6 z-10">
           <ToolButton icon={MousePointer2} active label="Select" />
           <div className="w-10 h-px bg-slate-100"></div>
-          <ToolButton icon={Plus} onClick={addHotspot} label="Add Hotspot" />
-          <ToolButton icon={Sparkles} onClick={() => alert("Magic scan running...")} label={isScanning ? "Scanning..." : "AI Magic Scan"} className={isScanning ? "animate-pulse text-blue-600" : ""} />
+          <ToolButton icon={Plus} onClick={() => addHotspot()} label="Add Hotspot" />
           <ToolButton icon={Music} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Sound" />
           <ToolButton icon={ShieldCheck} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Watermark" />
           <ToolButton icon={Settings} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Settings" />
@@ -547,8 +576,8 @@ export default function CampaignEditor() {
                                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
                               >
                                 <option value="">Select Destination Scene</option>
-                                {allCampaigns.filter(c => c.id !== id).map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                {allCampaigns.filter(c => c.id !== Number(id)).map(c => (
+                                  <option key={c.id} value={String(c.id)}>{c.name}</option>
                                 ))}
                               </select>
                             </div>
@@ -900,9 +929,9 @@ function TextAreaField({ label, value, onChange }: any) {
 function FileUploadField({ label, onUpload, preview, type = 'image' }: any) {
   const inputRef = useRef<HTMLInputElement>(null);
   const getAcceptType = () => {
-    if (type === 'video') return 'video/*';
-    if (type === 'sound') return 'audio/*';
-    return 'image/*';
+    if (type === 'video') return 'video/mp4,video/webm,.mp4,.webm';
+    if (type === 'sound') return 'audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg';
+    return 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,.jpg,.jpeg,.png,.gif,.webp,.svg';
   };
 
   return (
@@ -970,12 +999,18 @@ function SettingsPanel({ campaign, setCampaign }: any) {
   const handleFileUpload = async (field: 'watermarkUrl' | 'soundUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && campaign) {
+      const validationError = validateUploadFile(file);
+      if (validationError) {
+        e.target.value = '';
+        alert(validationError);
+        return;
+      }
       try {
         setSaving(true);
         const { data } = await uploadsApi.upload(file);
         setCampaign({ ...campaign, [field]: data.url });
-      } catch (err) {
-        alert('Failed to upload asset');
+      } catch (err: any) {
+        alert(err.response?.data?.message || 'Failed to upload asset');
       } finally {
         setSaving(false);
       }
@@ -1066,10 +1101,6 @@ function EmbedModal({ show, onClose, code, url }: { show: boolean; onClose: () =
               <div className="bg-blue-50 rounded-3xl p-6 border border-blue-100">
                 <h4 className="font-black text-blue-900 text-sm mb-4 flex items-center gap-2"><Globe className="w-5 h-5" /> Deployment Instructions</h4>
                 <div className="space-y-4">
-                  <div>
-                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">MCOM Properties</p>
-                    <p className="text-sm text-blue-600">Paste the iframe code into your CMS editor or use the custom HTML component in your page builder.</p>
-                  </div>
                   <div>
                     <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">External Websites</p>
                     <p className="text-sm text-blue-600">Ensure the domain is verified in your <button className="underline font-black" onClick={() => (window.location.href = '/domains')}>Domain Settings</button> before embedding.</p>

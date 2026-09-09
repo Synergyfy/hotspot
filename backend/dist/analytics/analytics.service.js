@@ -18,6 +18,9 @@ let AnalyticsService = class AnalyticsService {
         this.prisma = prisma;
     }
     async logEvent(campaignId, data) {
+        const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
         return this.prisma.analyticsEvent.create({
             data: {
                 campaignId,
@@ -25,16 +28,25 @@ let AnalyticsService = class AnalyticsService {
             },
         });
     }
-    async getStats(campaignId) {
-        const events = await this.prisma.analyticsEvent.groupBy({
-            by: ['eventType'],
-            where: { campaignId },
-            _count: true,
-        });
-        const leadsCount = await this.prisma.lead.count({
-            where: { campaignId },
-        });
-        return { events, leads: leadsCount };
+    async getStats(campaignId, userId) {
+        const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
+        if (campaign.userId !== userId)
+            throw new common_1.NotFoundException('Campaign not found');
+        const [events, aggregated, leadsCount] = await Promise.all([
+            this.prisma.analyticsEvent.findMany({
+                where: { campaignId },
+                orderBy: { timestamp: 'desc' },
+            }),
+            this.prisma.analyticsEvent.groupBy({
+                by: ['eventType'],
+                where: { campaignId },
+                _count: true,
+            }),
+            this.prisma.lead.count({ where: { campaignId } }),
+        ]);
+        return { events, aggregated, leads: leadsCount };
     }
 };
 exports.AnalyticsService = AnalyticsService;
