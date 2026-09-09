@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Lead, Campaign } from '../types';
+import { Lead } from '../types';
 import { Download, Search, Mail, Calendar, Tag, Trash2, ArrowLeft, X, User, FileText, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { leadsApi } from '../api/services';
-import { campaignsApi } from '../api/campaigns';
 
 export default function LeadsManager() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -18,12 +16,8 @@ export default function LeadsManager() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [leadsRes, campaignsRes] = await Promise.all([
-          leadsApi.findAll(),
-          campaignsApi.findAll()
-        ]);
+        const leadsRes = await leadsApi.findAll();
         setLeads(leadsRes.data);
-        setCampaigns(campaignsRes.data);
       } catch (err) {
         console.error('Failed to fetch leads data', err);
       } finally {
@@ -36,13 +30,11 @@ export default function LeadsManager() {
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = (lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (lead.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCampaign = selectedCampaignId === 'all' || lead.campaignId === selectedCampaignId;
+    const matchesCampaign = selectedCampaignId === 'all' || String(lead.campaignId) === selectedCampaignId;
     return matchesSearch && matchesCampaign;
   });
 
-  const getCampaignName = (id: string | number) => {
-    return campaigns.find(c => String(c.id) === String(id))?.name || 'Unknown Campaign';
-  };
+  const campaignOptions = [...new Map(leads.map(l => [l.campaignId, { id: l.campaignId, name: l.campaign?.name || 'Unknown Campaign' }])).values()];
 
   const exportLeads = () => {
     const headers = ['Name', 'Email', 'Campaign', 'Date'];
@@ -51,7 +43,7 @@ export default function LeadsManager() {
       ...filteredLeads.map(lead => [
         `"${lead.name || 'Anonymous'}"`,
         `"${lead.email}"`,
-        `"${getCampaignName(lead.campaignId)}"`,
+        `"${lead.campaign?.name || 'Unknown Campaign'}"`,
         `"${new Date(lead.createdAt || (lead as any).timestamp).toLocaleDateString()}"`
       ].join(','))
     ].join('\n');
@@ -72,8 +64,12 @@ export default function LeadsManager() {
     try {
       await leadsApi.remove(id);
       setLeads(leads.filter(l => l.id !== id));
-    } catch (err) {
-      alert('Failed to delete lead');
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        alert('You do not have permission to delete this lead.');
+      } else {
+        alert('Failed to delete lead');
+      }
     }
   };
 
@@ -120,7 +116,7 @@ export default function LeadsManager() {
             className="bg-white border border-slate-200 rounded-2xl px-6 py-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold shadow-sm"
           >
             <option value="all">All Campaigns</option>
-            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {campaignOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
 
@@ -155,7 +151,7 @@ export default function LeadsManager() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg w-fit">
                         <Tag className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="text-xs font-bold text-slate-600">{getCampaignName(lead.campaignId)}</span>
+                        <span className="text-xs font-bold text-slate-600">{lead.campaign?.name || 'Unknown Campaign'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-6">
@@ -216,7 +212,7 @@ export default function LeadsManager() {
                   </div>
                   <div>
                     <h2 className="text-xl font-black text-slate-900 leading-tight">Lead Details</h2>
-                    <p className="text-sm text-slate-500 font-medium">Captured from {getCampaignName(selectedLead.campaignId)}</p>
+                    <p className="text-sm text-slate-500 font-medium">Captured from {selectedLead.campaign?.name || 'Unknown Campaign'}</p>
                   </div>
                 </div>
                 <button 

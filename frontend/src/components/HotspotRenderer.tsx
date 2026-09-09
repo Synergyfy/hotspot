@@ -59,7 +59,7 @@ export default function HotspotRenderer() {
     fetchCampaign();
   }, [id]);
 
-  const trackEvent = async (campaignId: string | number, type: 'view' | 'click' | 'cta', hotspotId?: string, domainName?: string) => {
+  const trackEvent = async (campaignId: string | number, type: 'view' | 'click' | 'cta', hotspotId?: string | number, domainName?: string) => {
     const referrer = domainName || (document.referrer ? new URL(document.referrer).hostname : window.location.hostname);
     try {
       await analyticsApi.logEvent(campaignId, {
@@ -466,7 +466,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
         </div>
         <div className="p-8 max-h-[60vh] overflow-y-auto">
           {isServiceFirst && <span className="text-xs font-black text-blue-600 uppercase tracking-[0.2em] block mb-2">Service-Led Experience</span>}
-          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}<span className="text-slate-400 text-[10px] font-bold ml-1">(128 reviews)</span></div>
+          <div className="flex items-center gap-1 text-amber-400 mb-2">{[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}</div>
           <div className="flex justify-between items-baseline mb-4">
             <h3 className="text-2xl font-black text-slate-900 leading-tight">{hotspot.title}</h3>
             {hotspot.price && <span className="text-xl font-black text-blue-600">{hotspot.currency || '$'}{hotspot.price}</span>}

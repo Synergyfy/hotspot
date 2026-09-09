@@ -19,6 +19,12 @@ export class CampaignsController {
     return this.campaignsService.findAll(userId);
   }
 
+  @Get('light')
+  @UseGuards(JwtAuthGuard)
+  findLight(@GetUser('userId') userId: number) {
+    return this.campaignsService.findLight(userId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string, @GetUser('userId') userId: number) {
