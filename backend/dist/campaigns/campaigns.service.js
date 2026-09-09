@@ -12,21 +12,33 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CampaignsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
+const UI_ONLY_HOTSPOT_FIELDS = [
+    'currency', 'triggerType', 'iconName', 'iconColor', 'backgroundColor',
+    'pulseAnimation', 'animationType', 'roundness', 'formFields', 'redirectUrl',
+    'imageUrl', 'videoUrl', 'price', 'ctaText', 'description', 'radius',
+    'width', 'height', 'filters', 'offerType', 'additionalImages',
+    'productInfo', 'icon',
+];
 function toDbHotspot(h) {
-    const { id, campaignId, createdAt, updatedAt, action, currency, triggerType, iconName, iconColor, backgroundColor, pulseAnimation, roundness, formFields, redirectUrl, width, height, imageUrl, videoUrl, price, ctaText, description, radius, filters, ...rest } = h;
+    const { id, campaignId, createdAt, updatedAt, action, ...rest } = h;
     const config = {};
-    const configSource = {
-        currency, triggerType, iconName, iconColor, backgroundColor,
-        pulseAnimation, roundness, formFields, redirectUrl,
-        imageUrl, videoUrl, price, ctaText, description, radius,
-        width, height, filters,
-    };
-    for (const [k, v] of Object.entries(configSource)) {
-        if (v !== undefined)
-            config[k] = v;
+    for (const key of UI_ONLY_HOTSPOT_FIELDS) {
+        if (h[key] !== undefined)
+            config[key] = h[key];
     }
     return {
-        ...rest,
+        type: rest.type,
+        x: rest.x,
+        y: rest.y,
+        width: rest.width ?? null,
+        height: rest.height ?? null,
+        title: rest.title,
+        description: config.description ?? null,
+        price: config.price ?? null,
+        ctaText: config.ctaText ?? null,
+        imageUrl: config.imageUrl ?? null,
+        videoUrl: config.videoUrl ?? null,
+        redirectUrl: config.redirectUrl ?? null,
         actionType: action?.type ?? 'url',
         actionValue: action?.value ?? '',
         config,
@@ -74,11 +86,22 @@ let CampaignsService = class CampaignsService {
         });
         return campaigns.map(toFrontendCampaign);
     }
-    async findOne(id) {
+    async findLight(userId) {
+        return this.prisma.campaign.findMany({
+            where: { userId },
+            select: { id: true, name: true },
+        });
+    }
+    async findOne(id, userId) {
         const campaign = await this.prisma.campaign.findUnique({
             where: { id },
             include: { hotspots: true },
         });
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
+        if (userId !== undefined && campaign.userId !== userId) {
+            throw new common_1.NotFoundException('Campaign not found');
+        }
         return toFrontendCampaign(campaign);
     }
     async update(id, userId, data) {
@@ -91,27 +114,26 @@ let CampaignsService = class CampaignsService {
         const existingHotspots = hotspots.filter((h) => Number.isInteger(h.id) && h.id > 0);
         const newHotspots = hotspots.filter((h) => !(Number.isInteger(h.id) && h.id > 0));
         const incomingIds = existingHotspots.map((h) => h.id);
-        await this.prisma.hotspot.deleteMany({
-            where: { campaignId: id, id: { notIn: incomingIds } },
-        });
-        await Promise.all(existingHotspots.map((h) => {
-            const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
-            return this.prisma.hotspot.update({
-                where: { id: h.id },
-                data: hotspotData,
+        const result = await this.prisma.$transaction(async (tx) => {
+            await tx.hotspot.deleteMany({
+                where: { campaignId: id, id: { notIn: incomingIds } },
             });
-        }));
-        const result = await this.prisma.campaign.update({
-            where: { id },
-            data: {
-                ...campaignData,
-                ...(newHotspots.length > 0 && {
-                    hotspots: {
-                        create: newHotspots.map(toDbHotspot),
-                    },
-                }),
-            },
-            include: { hotspots: true },
+            await Promise.all(existingHotspots.map((h) => tx.hotspot.update({
+                where: { id: h.id },
+                data: toDbHotspot(h),
+            })));
+            return tx.campaign.update({
+                where: { id },
+                data: {
+                    ...campaignData,
+                    ...(newHotspots.length > 0 && {
+                        hotspots: {
+                            create: newHotspots.map(toDbHotspot),
+                        },
+                    }),
+                },
+                include: { hotspots: true },
+            });
         });
         return toFrontendCampaign(result);
     }
@@ -121,10 +143,12 @@ let CampaignsService = class CampaignsService {
             throw new common_1.NotFoundException('Campaign not found');
         if (campaign.userId !== userId)
             throw new common_1.ForbiddenException('Unauthorized');
-        await this.prisma.hotspot.deleteMany({ where: { campaignId: id } });
-        await this.prisma.analyticsEvent.deleteMany({ where: { campaignId: id } });
-        await this.prisma.lead.deleteMany({ where: { campaignId: id } });
-        return this.prisma.campaign.delete({ where: { id } });
+        await this.prisma.$transaction([
+            this.prisma.hotspot.deleteMany({ where: { campaignId: id } }),
+            this.prisma.analyticsEvent.deleteMany({ where: { campaignId: id } }),
+            this.prisma.lead.deleteMany({ where: { campaignId: id } }),
+            this.prisma.campaign.delete({ where: { id } }),
+        ]);
     }
 };
 exports.CampaignsService = CampaignsService;

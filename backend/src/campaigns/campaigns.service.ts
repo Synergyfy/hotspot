@@ -1,6 +1,15 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** UI-only fields carried on a hotspot that must be persisted inside `config` JSON, never as DB columns. */
+const UI_ONLY_HOTSPOT_FIELDS = [
+  'currency', 'triggerType', 'iconName', 'iconColor', 'backgroundColor',
+  'pulseAnimation', 'animationType', 'roundness', 'formFields', 'redirectUrl',
+  'imageUrl', 'videoUrl', 'price', 'ctaText', 'description', 'radius',
+  'width', 'height', 'filters', 'offerType', 'additionalImages',
+  'productInfo', 'icon',
+] as const;
+
 /** Convert a frontend hotspot object → Prisma-compatible row */
 function toDbHotspot(h: any) {
   const {
@@ -9,28 +18,32 @@ function toDbHotspot(h: any) {
     // Strip nested action object → flatten below
     action,
     // Strip all UI-only fields → pack into config JSON
-    currency, triggerType, iconName, iconColor, backgroundColor,
-    pulseAnimation, roundness, formFields, redirectUrl,
-    width, height, imageUrl, videoUrl, price, ctaText,
-    description, radius, filters,
-    // What remains: x, y, type, title — valid DB columns
     ...rest
   } = h;
 
-  // Remove undefined values from config so JSON stays clean
+  // Pack every recognized UI-only field into config so it round-trips through
+  // toFrontendHotspot, and never leaks into the Prisma write as an unknown field.
   const config: Record<string, any> = {};
-  const configSource = {
-    currency, triggerType, iconName, iconColor, backgroundColor,
-    pulseAnimation, roundness, formFields, redirectUrl,
-    imageUrl, videoUrl, price, ctaText, description, radius,
-    width, height, filters,
-  };
-  for (const [k, v] of Object.entries(configSource)) {
-    if (v !== undefined) config[k] = v;
+  for (const key of UI_ONLY_HOTSPOT_FIELDS) {
+    if (h[key] !== undefined) config[key] = h[key];
   }
 
+  // Only ever persist the real Hotspot DB columns. Unknown/UI fields that were
+  // not explicitly recognized above are deliberately dropped instead of being
+  // passed to Prisma (which would throw "unknown argument" → 500).
   return {
-    ...rest,
+    type: rest.type,
+    x: rest.x,
+    y: rest.y,
+    width: rest.width ?? null,
+    height: rest.height ?? null,
+    title: rest.title,
+    description: config.description ?? null,
+    price: config.price ?? null,
+    ctaText: config.ctaText ?? null,
+    imageUrl: config.imageUrl ?? null,
+    videoUrl: config.videoUrl ?? null,
+    redirectUrl: config.redirectUrl ?? null,
     actionType: action?.type ?? 'url',
     actionValue: action?.value ?? '',
     config,
@@ -83,6 +96,13 @@ export class CampaignsService {
     return campaigns.map(toFrontendCampaign);
   }
 
+  async findLight(userId: number) {
+    return this.prisma.campaign.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+    });
+  }
+
   async findOne(id: number, userId?: number) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
@@ -116,13 +136,12 @@ export class CampaignsService {
 
       // Update each existing hotspot in-place
       await Promise.all(
-        existingHotspots.map((h: any) => {
-          const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
-          return tx.hotspot.update({
+        existingHotspots.map((h: any) =>
+          tx.hotspot.update({
             where: { id: h.id },
-            data: hotspotData,
-          });
-        }),
+            data: toDbHotspot(h),
+          }),
+        ),
       );
 
       // Update campaign fields + create brand-new hotspots

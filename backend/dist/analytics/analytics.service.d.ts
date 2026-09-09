@@ -10,8 +10,16 @@ export declare class AnalyticsService {
         timestamp: Date;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
-    getStats(campaignId: number): Promise<{
-        events: (import(".prisma/client").Prisma.PickEnumerable<import(".prisma/client").Prisma.AnalyticsEventGroupByOutputType, "eventType"[]> & {
+    getStats(campaignId: number, userId: number): Promise<{
+        events: {
+            domain: string | null;
+            id: number;
+            campaignId: number;
+            eventType: string;
+            timestamp: Date;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        }[];
+        aggregated: (import("@prisma/client").Prisma.PickEnumerable<import("@prisma/client").Prisma.AnalyticsEventGroupByOutputType, "eventType"[]> & {
             _count: number;
         })[];
         leads: number;

@@ -20,7 +20,7 @@ export interface FormField {
 }
 
 export interface Hotspot {
-  id: string;
+  id: string | number;
   type: HotspotType;
   x: number;
   y: number;
@@ -66,10 +66,10 @@ export interface Hotspot {
 }
 
 export interface Campaign {
-  id: string;
+  id: number;
   name: string;
   imageUrl: string;
-  userId: string;
+  userId: number;
   createdAt: string;
   hotspots: Hotspot[];
   watermarkUrl?: string;
@@ -91,8 +91,8 @@ export interface Campaign {
 }
 
 export interface Domain {
-  id: string;
-  userId: string;
+  id: number;
+  userId: number;
   name: string;
   verified: boolean;
 }
@@ -105,11 +105,12 @@ export interface Lead {
   createdAt: string;
   timestamp?: string; // For legacy/local data support
   data?: Record<string, string>;
+  campaign?: { id: number | string; name: string };
 }
 
 export interface AnalyticsEvent {
-  id: string;
-  campaignId: string;
+  id: number;
+  campaignId: number;
   eventType: 'view' | 'click' | 'cta';
   timestamp: string;
   domain?: string;

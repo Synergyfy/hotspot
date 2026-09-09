@@ -25,8 +25,11 @@ let LeadsController = class LeadsController {
     create(body) {
         return this.leadsService.create(body);
     }
-    findAll(userId) {
-        return this.leadsService.findAll(userId);
+    findAll(userId, campaignId) {
+        return this.leadsService.findAll(userId, campaignId ? +campaignId : undefined);
+    }
+    remove(id, userId) {
+        return this.leadsService.remove(+id, userId);
     }
 };
 exports.LeadsController = LeadsController;
@@ -41,10 +44,20 @@ __decorate([
     (0, common_1.Get)(),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, get_user_decorator_1.GetUser)('userId')),
+    __param(1, (0, common_1.Query)('campaignId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
+    __metadata("design:paramtypes", [Number, String]),
     __metadata("design:returntype", void 0)
 ], LeadsController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, get_user_decorator_1.GetUser)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number]),
+    __metadata("design:returntype", void 0)
+], LeadsController.prototype, "remove", null);
 exports.LeadsController = LeadsController = __decorate([
     (0, common_1.Controller)('leads'),
     __metadata("design:paramtypes", [leads_service_1.LeadsService])
