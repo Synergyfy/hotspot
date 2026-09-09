@@ -12,17 +12,10 @@ export declare class LeadsService {
         campaignId: number;
         ip: string | null;
     }>;
-    findAll(userId: number): Promise<({
+    findAll(userId: number, campaignId?: number): Promise<({
         campaign: {
             id: number;
             name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            imageUrl: string;
-            filters: import("@prisma/client/runtime/library").JsonValue | null;
-            userId: number;
-            watermarkUrl: string | null;
-            soundUrl: string | null;
         };
     } & {
         id: number;
@@ -34,4 +27,14 @@ export declare class LeadsService {
         campaignId: number;
         ip: string | null;
     })[]>;
+    remove(id: number, userId: number): Promise<{
+        id: number;
+        email: string;
+        name: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        data: import("@prisma/client/runtime/library").JsonValue | null;
+        campaignId: number;
+        ip: string | null;
+    }>;
 }

@@ -18,8 +18,12 @@ const platform_express_1 = require("@nestjs/platform-express");
 const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
 const multer_1 = require("multer");
 const path_1 = require("path");
+const ALLOWED_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|wav|ogg)$/i;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 let UploadsController = class UploadsController {
     uploadFile(file) {
+        if (!file)
+            throw new common_1.BadRequestException('No file uploaded');
         return {
             url: `/uploads/${file.filename}`,
         };
@@ -37,6 +41,13 @@ __decorate([
                 cb(null, `${file.fieldname}-${uniqueSuffix}${(0, path_1.extname)(file.originalname)}`);
             },
         }),
+        limits: { fileSize: MAX_FILE_SIZE },
+        fileFilter: (req, file, cb) => {
+            if (!ALLOWED_EXTENSIONS.test(file.originalname)) {
+                return cb(new common_1.BadRequestException('File type not allowed. Supported: JPG, PNG, GIF, WebP, SVG, MP4, WebM, MP3, WAV, OGG'), false);
+            }
+            cb(null, true);
+        },
     })),
     __param(0, (0, common_1.UploadedFile)()),
     __metadata("design:type", Function),

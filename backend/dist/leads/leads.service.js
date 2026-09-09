@@ -18,15 +18,32 @@ let LeadsService = class LeadsService {
         this.prisma = prisma;
     }
     async create(data) {
+        const campaign = await this.prisma.campaign.findUnique({ where: { id: data.campaignId } });
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
         return this.prisma.lead.create({ data });
     }
-    async findAll(userId) {
+    async findAll(userId, campaignId) {
+        const where = { campaign: { userId } };
+        if (campaignId) {
+            where.campaignId = campaignId;
+        }
         return this.prisma.lead.findMany({
-            where: {
-                campaign: { userId },
-            },
-            include: { campaign: true },
+            where,
+            include: { campaign: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'desc' },
         });
+    }
+    async remove(id, userId) {
+        const lead = await this.prisma.lead.findUnique({
+            where: { id },
+            include: { campaign: { select: { userId: true } } },
+        });
+        if (!lead)
+            throw new common_1.NotFoundException('Lead not found');
+        if (lead.campaign.userId !== userId)
+            throw new common_1.ForbiddenException('Unauthorized');
+        return this.prisma.lead.delete({ where: { id } });
     }
 };
 exports.LeadsService = LeadsService;

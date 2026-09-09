@@ -26,7 +26,7 @@ export default function Analytics() {
         ]);
 
         setCampaign(campaignRes.data);
-        setEvents(eventsRes.data);
+        setEvents(eventsRes.data.events);
         setLeads(leadsRes.data);
       } catch (err) {
         console.error('Failed to fetch analytics', err);
@@ -43,8 +43,10 @@ export default function Analytics() {
   const leadCount = leads.length;
   const ctr = views > 0 ? ((clicks / views) * 100).toFixed(1) : '0';
 
-  // Group events by day for chart
-  const dailyData = events.reduce((acc: any[], event) => {
+  // Group events by day for chart (chronological, most recent 7 days)
+  const dailyData = [...events]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    .reduce((acc: any[], event) => {
     const date = new Date(event.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const existing = acc.find(d => d.date === date);
     if (existing) {
@@ -53,7 +55,7 @@ export default function Analytics() {
       acc.push({ date, [event.eventType]: 1 });
     }
     return acc;
-  }, []).slice(-7);
+    }, []).slice(-7);
 
   const exportLeads = () => {
     const csv = [
@@ -111,10 +113,10 @@ export default function Analytics() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <StatCard title="Views" value={views} icon={Users} color="blue" trend="+ --%" />
-          <StatCard title="Clicks" value={clicks} icon={MousePointer2} color="indigo" trend="+ --%" />
-          <StatCard title="CTR" value={`${ctr}%`} icon={TrendingUp} color="emerald" trend="+ --%" />
-          <StatCard title="Leads" value={leadCount} icon={Mail} color="rose" trend="+ --%" />
+          <StatCard title="Views" value={views} icon={Users} color="blue" />
+          <StatCard title="Clicks" value={clicks} icon={MousePointer2} color="indigo" />
+          <StatCard title="CTR" value={`${ctr}%`} icon={TrendingUp} color="emerald" />
+          <StatCard title="Leads" value={leadCount} icon={Mail} color="rose" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
@@ -253,7 +255,7 @@ export default function Analytics() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, color, trend }: { title: string, value: any, icon: any, color: string, trend: string }) {
+function StatCard({ title, value, icon: Icon, color }: { title: string, value: any, icon: any, color: string }) {
   const colors: any = {
     blue: 'bg-blue-50 text-blue-600',
     indigo: 'bg-indigo-50 text-indigo-600',
@@ -266,9 +268,6 @@ function StatCard({ title, value, icon: Icon, color, trend }: { title: string, v
       <div className="flex items-center justify-between mb-6">
         <div className={`p-4 rounded-2xl ${colors[color]} group-hover:scale-110 transition-transform`}>
           <Icon className="w-6 h-6" />
-        </div>
-        <div className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg">
-          {trend}
         </div>
       </div>
       <div className="text-sm font-black uppercase tracking-[0.2em] text-slate-300 mb-2">{title}</div>

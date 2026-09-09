@@ -25,7 +25,11 @@ export default function Auth() {
       localStorage.setItem('user', JSON.stringify(data.user));
       window.location.href = '/';
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Authentication failed');
+      if (err.response?.status === 429) {
+        setError('Too many attempts. Please try again later.');
+      } else {
+        setError(err.response?.data?.message || 'Authentication failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -56,21 +60,7 @@ export default function Auth() {
             </p>
           </div>
 
-          <div className="relative z-10 bg-blue-700/30 backdrop-blur-md border border-white/10 p-6 rounded-3xl">
-            <div className="flex gap-1 mb-4">
-              {[1,2,3,4,5].map(i => <div key={i} className="w-4 h-4 bg-yellow-400 rounded-full"></div>)}
-            </div>
-            <p className="italic text-blue-50 font-medium">
-              "ClickSIP transformed our product catalog. Our conversion rate jumped by 40% in the first month."
-            </p>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-400 rounded-full"></div>
-              <div>
-                <div className="font-bold text-sm">Sarah Jenkins</div>
-                <div className="text-xs text-blue-200">Head of E-commerce, StyleCo</div>
-              </div>
-            </div>
-          </div>
+
         </div>
 
         {/* Right Side: Auth Form */}

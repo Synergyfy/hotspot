@@ -5,6 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { campaignsApi } from '../api/campaigns';
 import { domainsApi, uploadsApi, leadsApi } from '../api/services';
+import { validateUploadFile } from '../utils/upload';
 
 export default function Dashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -42,12 +43,18 @@ export default function Dashboard() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const validationError = validateUploadFile(file);
+      if (validationError) {
+        e.target.value = '';
+        alert(validationError);
+        return;
+      }
       try {
         setSubmitting(true);
         const { data } = await uploadsApi.upload(file);
         setNewCampaign({ ...newCampaign, imageUrl: data.url });
-      } catch (err) {
-        alert('Failed to upload image');
+      } catch (err: any) {
+        alert(err.response?.data?.message || 'Failed to upload image');
       } finally {
         setSubmitting(false);
       }
@@ -263,7 +270,7 @@ export default function Dashboard() {
                       required
                       value={newCampaign.name}
                       onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
-                      placeholder="Summer Collection 2024"
+                      placeholder="e.g. Summer Collection"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                     />
                   </div>
@@ -307,7 +314,7 @@ export default function Dashboard() {
                               <>
                                 <Upload className="w-8 h-8 text-slate-300 mb-2" />
                                 <span className="text-sm font-bold text-slate-400">Click to upload image</span>
-                                <span className="text-[10px] text-slate-300 mt-1 uppercase tracking-widest">PNG, JPG up to 5MB</span>
+                                <span className="text-[10px] text-slate-300 mt-1 uppercase tracking-widest">PNG, JPG, WebP up to 10MB</span>
                               </>
                             )}
                           </>
@@ -316,7 +323,7 @@ export default function Dashboard() {
                           type="file"
                           ref={fileInputRef}
                           onChange={handleFileChange}
-                          accept="image/*"
+                          accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
                           className="hidden"
                         />
                       </div>
