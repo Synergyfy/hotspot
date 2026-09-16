@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
@@ -12,10 +12,38 @@ import { DomainsModule } from './domains/domains.module';
 import { PublicModule } from './public/public.module';
 import { UploadsModule } from './uploads/uploads.module';
 
+import { User } from './entities/user.entity';
+import { Campaign } from './entities/campaign.entity';
+import { Hotspot } from './entities/hotspot.entity';
+import { Lead } from './entities/lead.entity';
+import { Domain } from './entities/domain.entity';
+import { AnalyticsEvent } from './entities/analytics-event.entity';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const host = config.get('DB_HOST', 'localhost');
+        const port = config.get<number>('DB_PORT', 5432);
+        const name = config.get('DB_NAME', 'hotspot_db');
+        const user = config.get('DB_USER', 'hotspot');
+        const password = config.get('DB_PASSWORD', '');
+
+        return {
+          type: 'postgres',
+          host,
+          port,
+          username: user,
+          password,
+          database: name,
+          entities: [User, Campaign, Hotspot, Lead, Domain, AnalyticsEvent],
+          synchronize: true,
+        };
+      },
+    }),
     AuthModule,
     UsersModule,
     CampaignsModule,

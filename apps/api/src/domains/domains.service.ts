@@ -1,26 +1,32 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Domain } from '../entities/domain.entity';
 
 @Injectable()
 export class DomainsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(Domain)
+    private domains: Repository<Domain>,
+  ) {}
 
   async create(userId: number, name: string) {
-    return this.prisma.domain.create({ data: { userId, name } });
+    const domain = this.domains.create({ userId, name });
+    return this.domains.save(domain);
   }
 
   async findAll(userId: number) {
-    return this.prisma.domain.findMany({ where: { userId } });
+    return this.domains.find({ where: { userId } });
   }
 
   async remove(id: number, userId: number) {
-    return this.prisma.domain.delete({ where: { id, userId } });
+    const domain = await this.domains.findOne({ where: { id, userId } });
+    if (!domain) return null;
+    return this.domains.remove(domain);
   }
 
   async verify(id: number, userId: number) {
-    return this.prisma.domain.update({
-      where: { id, userId },
-      data: { verified: true },
-    });
+    await this.domains.update({ id, userId }, { verified: true });
+    return this.domains.findOne({ where: { id } });
   }
 }

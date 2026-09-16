@@ -5,10 +5,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "test": "turbo test",
-    "db:generate": "pnpm --filter @hotspot/api db:generate",
-    "db:push": "pnpm --filter @hotspot/api db:push",
-    "db:migrate": "pnpm --filter @hotspot/api db:migrate"
+    "test": "turbo test"
   },
   "devDependencies": {
     "turbo": "^2.5.5"

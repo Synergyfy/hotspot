@@ -1,38 +1,52 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Lead } from '../entities/lead.entity';
+import { Campaign } from '../entities/campaign.entity';
 
 @Injectable()
 export class LeadsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(Lead)
+    private leads: Repository<Lead>,
+    @InjectRepository(Campaign)
+    private campaigns: Repository<Campaign>,
+  ) {}
 
   async create(data: any) {
-    const campaign = await this.prisma.campaign.findUnique({ where: { id: data.campaignId } });
+    const campaign = await this.campaigns.findOne({ where: { id: data.campaignId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
-    return this.prisma.lead.create({ data });
+    const lead = this.leads.create(data);
+    return this.leads.save(lead);
   }
 
   async findAll(userId: number, campaignId?: number) {
-    const where: any = { campaign: { userId } };
+    const qb = this.leads
+      .createQueryBuilder('lead')
+      .innerJoinAndSelect('lead.campaign', 'campaign')
+      .where('campaign.userId = :userId', { userId })
+      .orderBy('lead.createdAt', 'DESC');
+
     if (campaignId) {
-      where.campaignId = campaignId;
+      qb.andWhere('lead.campaignId = :campaignId', { campaignId });
     }
 
-    return this.prisma.lead.findMany({
-      where,
-      include: { campaign: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const leads = await qb.getMany();
+    return leads.map((l) => ({
+      ...l,
+      campaign: { id: l.campaign.id, name: l.campaign.name },
+    }));
   }
 
   async remove(id: number, userId: number) {
-    const lead = await this.prisma.lead.findUnique({
+    const lead = await this.leads.findOne({
       where: { id },
-      include: { campaign: { select: { userId: true } } },
+      relations: { campaign: true },
     });
     if (!lead) throw new NotFoundException('Lead not found');
     if (lead.campaign.userId !== userId) throw new ForbiddenException('Unauthorized');
 
-    return this.prisma.lead.delete({ where: { id } });
+    return this.leads.remove(lead);
   }
 }
