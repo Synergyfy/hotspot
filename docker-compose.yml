@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -7,10 +5,10 @@ services:
     restart: always
     environment:
       POSTGRES_USER: hotspot
-      POSTGRES_PASSWORD: hotspot_password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hotspot_password}
       POSTGRES_DB: hotspot_db
     ports:
-      - '5433:5432'
+      - '${DB_PORT:-5433}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
