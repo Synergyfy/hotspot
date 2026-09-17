@@ -29,11 +29,11 @@ import { AnalyticsEvent } from './entities/analytics-event.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const host = config.get('DB_HOST', 'localhost');
-        const port = config.get<number>('DB_PORT', 5432);
-        const name = config.get('DB_NAME', 'hotspot_db');
-        const user = config.get('DB_USER', 'hotspot');
-        const password = config.get('DB_PASSWORD', '');
+        const host = config.get('POSTGRES_HOST', 'localhost');
+        const port = config.get<number>('POSTGRES_PORT', 5432);
+        const name = config.get('POSTGRES_NAME', 'postgres');
+        const user = config.get('POSTGRES_USERNAME', 'hotspot');
+        const password = config.get('POSTGRES_PASSWORD', '');
 
         return {
           type: 'postgres',
