@@ -17,21 +17,55 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   password: string;
 
   @Column({ nullable: true })
   name: string;
 
-  @OneToMany(() => Campaign, (campaign) => campaign.user)
-  campaigns: Campaign[];
+  @Column({ default: 'agent' })
+  role: string;
 
-  @OneToMany(() => Domain, (domain) => domain.user)
-  domains: Domain[];
+  @Column({ default: false })
+  isOnboarded: boolean;
+
+  // MCOM fields
+  @Column({ nullable: true })
+  mcomUserId: string;
+
+  @Column({ nullable: true })
+  mcomMembershipLevel: string;
+
+  @Column({ nullable: true })
+  mcomMembershipTier: string;
+
+  @Column({ nullable: true })
+  mcomMembershipStatus: string;
+
+  @Column({ default: false })
+  mcomCanAccessVcard: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  mcomAccessToken: string;
+
+  @Column({ type: 'text', nullable: true })
+  mcomRefreshToken: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  mcomTokenExpiresAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  mcomTokensUpdatedAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToMany(() => Campaign, (campaign) => campaign.user)
+  campaigns: Campaign[];
+
+  @OneToMany(() => Domain, (domain) => domain.user)
+  domains: Domain[];
 }

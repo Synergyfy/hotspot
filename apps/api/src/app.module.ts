@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -11,6 +12,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { DomainsModule } from './domains/domains.module';
 import { PublicModule } from './public/public.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { McomModule } from './mcom/mcom.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 import { User } from './entities/user.entity';
 import { Campaign } from './entities/campaign.entity';
@@ -52,8 +55,15 @@ import { AnalyticsEvent } from './entities/analytics-event.entity';
     DomainsModule,
     PublicModule,
     UploadsModule,
+    McomModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
