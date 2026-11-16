@@ -11,13 +11,20 @@ import {
   Smartphone, Music, ShieldCheck, X, Upload, Globe, Search, Info, ExternalLink,
   Phone, CheckCircle, ArrowRight, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award,
-  ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft, Minus, Activity
+  ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft, Minus, Activity,
+  Share2, CheckCircle2, MousePointerClick, AlertTriangle, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
 
 import { campaignsApi } from '../api/campaigns';
 import { uploadsApi } from '../api/services';
+import { useToast } from './ui/Toast';
+import { HelpTip } from './ui/Tooltip';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { StepIndicator } from './ui/StepIndicator';
+import { PublishModal } from './PublishModal';
+import { getErrorMessage } from '../lib/errors';
 
 const ICON_LIBRARY = [
   { name: 'Info', icon: Info },
@@ -61,6 +68,29 @@ const CURRENCIES = [
   { label: 'AUD (A$)', value: 'A$', icon: DollarSign },
 ];
 
+const HOTSPOT_TYPE_HELP: Record<string, string> = {
+  standard: 'A simple dot with a title, description and optional button.',
+  product: 'A product card with price, gallery and a buy button.',
+  signup_form: 'Collect names, emails or other answers right on the image.',
+  video: 'Open a video in a pop-up card.',
+  text: 'A text-only note or label with no media.',
+  image: 'Show a second image in a pop-up card.',
+};
+
+/** Minimum distance (in image pixels) between two hotspots before they are considered overlapping. */
+const MIN_HOTSPOT_GAP = 44;
+
+/** Stable representation of everything that can be saved on this screen. */
+function buildSnapshot(campaign: Campaign | null, hotspots: Hotspot[], filters: any) {
+  return JSON.stringify({
+    name: campaign?.name || '',
+    hotspots,
+    filters,
+    watermarkUrl: campaign?.watermarkUrl || '',
+    soundUrl: campaign?.soundUrl || '',
+  });
+}
+
 export default function CampaignEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -71,19 +101,23 @@ export default function CampaignEditor() {
     invert: false, hue: 0, saturation: 0, opacity: 1, noise: 0, pixelSize: 1, vignette: 0
   });
   const [activeTab, setActiveTab] = useState<'properties' | 'filters' | 'settings'>('properties');
-  const [filterScope, setFilterScope] = useState<'global' | 'hotspot'>('global');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | number | null>(null);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
   const [scale, setScale] = useState(1);
   const [image] = useImage(campaign?.imageUrl || '', 'anonymous');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showEmbedModal, setShowEmbedModal] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [hotspotToDelete, setHotspotToDelete] = useState<Hotspot | null>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const stageRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!id) return;
@@ -93,12 +127,15 @@ export default function CampaignEditor() {
           campaignsApi.findOne(id),
           campaignsApi.findAll()
         ]);
+        const nextFilters = campaign.filters ? { ...filters, ...campaign.filters } : filters;
+        const nextHotspots = campaign.hotspots || [];
         setCampaign(campaign);
         setAllCampaigns(allCamp);
-        setHotspots(campaign.hotspots || []);
-        if (campaign.filters) setFilters({ ...filters, ...campaign.filters });
+        setHotspots(nextHotspots);
+        setFilters(nextFilters);
+        setSavedSnapshot(buildSnapshot(campaign, nextHotspots, nextFilters));
       } catch (err) {
-        console.error('Failed to fetch campaign', err);
+        toast.error('Could not open this campaign', getErrorMessage(err, 'It may have been deleted or you may not have access.'));
         navigate('/');
       } finally {
         setLoading(false);
@@ -108,6 +145,29 @@ export default function CampaignEditor() {
   }, [id, navigate]);
 
   useEffect(() => { if (imageRef.current) imageRef.current.cache(); }, [image, filters]);
+
+  // Escape leaves "click the image to place a hotspot" mode.
+  useEffect(() => {
+    if (!isAdding) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsAdding(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isAdding]);
+
+  const snapshot = useMemo(() => (campaign ? buildSnapshot(campaign, hotspots, filters) : ''), [campaign, hotspots, filters]);
+  const isDirty = Boolean(campaign) && savedSnapshot !== '' && snapshot !== savedSnapshot;
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const konvaFilters = useMemo(() => {
     const f: any[] = [];
@@ -124,36 +184,108 @@ export default function CampaignEditor() {
   }, [filters]);
 
   const handleStageClick = (e: any) => {
-    if (e.target === e.target.getStage() || e.target.name() === 'background-image') {
-      const stage = e.target.getStage();
-      const pos = stage.getPointerPosition();
-      if (pos) {
-        // Correct calculation: (pointerPos - stagePosition) / stageScale
-        const relativeX = (pos.x - stage.x()) / stage.scaleX();
-        const relativeY = (pos.y - stage.y()) / stage.scaleY();
-        addHotspot(relativeX, relativeY);
-      } else {
-        setSelectedId(null);
-      }
+    const clickedBackground = e.target === e.target.getStage() || e.target.name() === 'background-image';
+    if (!clickedBackground) return;
+
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    if (!pos) {
+      setSelectedId(null);
+      return;
+    }
+
+    // Only add on an explicit "add" mode (or when placing the very first dot).
+    // Plain background clicks now deselect, so brushing past a dot can never
+    // spawn a second hotspot on top of it.
+    if (hotspots.length === 0 || isAdding) {
+      const relativeX = (pos.x - stage.x()) / stage.scaleX();
+      const relativeY = (pos.y - stage.y()) / stage.scaleY();
+      addHotspot(relativeX, relativeY);
+    } else {
+      setSelectedId(null);
+      setHoveredId(null);
     }
   };
 
+  const startAdding = () => {
+    setHintDismissed(true);
+    setSelectedId(null);
+    setIsAdding(true);
+    toast.info('Click the image to place the hotspot', 'Press Esc or use Cancel above the image to stop.');
+  };
+
   const addHotspot = (x = 100, y = 100) => {
+    // Nudge a new dot away from existing ones so accidental double-clicks can
+    // never stack two hotspots on exactly the same spot.
+    const isFree = (px: number, py: number) =>
+      !hotspots.some((h) => Math.hypot((h.x || 0) - px, (h.y || 0) - py) < MIN_HOTSPOT_GAP);
+
+    let px = x;
+    let py = y;
+    let nudged = false;
+
+    if (!isFree(px, py)) {
+      nudged = true;
+      let found = false;
+      for (let ring = 1; ring <= 5 && !found; ring += 1) {
+        const radius = MIN_HOTSPOT_GAP * ring;
+        for (let step = 0; step < 12 && !found; step += 1) {
+          const angle = (Math.PI * 2 * step) / 12;
+          const candidateX = x + Math.cos(angle) * radius;
+          const candidateY = y + Math.sin(angle) * radius;
+          if (isFree(candidateX, candidateY)) {
+            px = candidateX;
+            py = candidateY;
+            found = true;
+          }
+        }
+      }
+    }
+
+    if (image) {
+      px = Math.min(Math.max(px, 16), image.width - 16);
+      py = Math.min(Math.max(py, 16), image.height - 16);
+    }
+
     const newHotspot: Hotspot = {
       id: Math.random().toString(36).substr(2, 9),
-      x, y, type: 'standard', title: 'New Hotspot',
+      x: px, y: py, type: 'standard', title: 'New Hotspot',
       action: { type: 'url', value: '' }, currency: '$', triggerType: 'hover',
     };
     setHotspots([...hotspots, newHotspot]);
     setSelectedId(newHotspot.id);
     setActiveTab('properties');
+    setHintDismissed(true);
+    // Stay in "add" mode so the user can keep clicking objects on the image
+    // to place more hotspots. Clicking an existing dot or pressing Esc/Cancel
+    // exits the mode.
+
+    if (nudged) {
+      toast.info('Placed beside the other dot', 'It was nudged slightly so the two hotspots do not overlap.');
+    }
   };
 
-  const updateHotspot = (hid: string, updates: Partial<Hotspot>) => {
+  const updateHotspot = (hid: string | number, updates: Partial<Hotspot>) => {
     setHotspots(hotspots.map(h => h.id === hid ? { ...h, ...updates } : h));
   };
 
-  const handleTypeChange = (hid: string, newType: HotspotType) => {
+  /** Move a hotspot off a neighbouring dot so both stay easy to click. */
+  const separateHotspot = (hotspot: Hotspot, other: Hotspot) => {
+    const dx = (hotspot.x || 0) - (other.x || 0);
+    const dy = (hotspot.y || 0) - (other.y || 0);
+    const distance = Math.hypot(dx, dy);
+    const angle = distance < 1 ? -Math.PI / 2 : Math.atan2(dy, dx);
+    let nx = (other.x || 0) + Math.cos(angle) * (MIN_HOTSPOT_GAP + 8);
+    let ny = (other.y || 0) + Math.sin(angle) * (MIN_HOTSPOT_GAP + 8);
+    if (image) {
+      nx = Math.min(Math.max(nx, 16), image.width - 16);
+      ny = Math.min(Math.max(ny, 16), image.height - 16);
+    }
+    updateHotspot(hotspot.id, { x: nx, y: ny });
+    toast.success('Hotspots spread apart', 'Drag either dot to fine-tune its position.');
+  };
+
+  const handleTypeChange = (hid: string | number, newType: HotspotType) => {
     const updates: Partial<Hotspot> = { type: newType };
     if (newType === 'signup_form') {
       const h = hotspots.find(x => x.id === hid);
@@ -167,50 +299,84 @@ export default function CampaignEditor() {
     updateHotspot(hid, updates);
   };
 
-  const deleteHotspot = (hid: string) => { setHotspots(hotspots.filter(h => h.id !== hid)); setSelectedId(null); };
+  const deleteHotspot = (hid: string | number) => {
+    setHotspots(hotspots.filter(h => h.id !== hid));
+    setSelectedId(null);
+    setHotspotToDelete(null);
+  };
 
-  const saveCampaign = async () => {
-    if (!campaign || !id) return;
+  /**
+   * Saves the current draft. Returns the saved campaign, or null on failure.
+   * `silent` suppresses the success toast (used by Preview/Publish).
+   */
+  const saveCampaign = async (options?: { silent?: boolean }): Promise<Campaign | null> => {
+    if (!campaign || !id) return null;
     setSaving(true);
     try {
-      await campaignsApi.update(id, {
+      const { data } = await campaignsApi.update(id, {
         name: campaign.name,
         hotspots,
         filters,
         watermarkUrl: campaign.watermarkUrl,
         soundUrl: campaign.soundUrl,
       });
+
+      const nextHotspots: Hotspot[] = data.hotspots || [];
+      const nextFilters = { ...filters, ...(data.filters || {}) };
+
+      setCampaign(data);
+      setHotspots(nextHotspots);
+      setFilters(nextFilters);
+      setSelectedId((previous) => (nextHotspots.some((h) => String(h.id) === String(previous)) ? previous : null));
+      setSavedSnapshot(buildSnapshot(data, nextHotspots, nextFilters));
+
+      if (!options?.silent) {
+        toast.success('Draft saved', 'Your image, hotspots and styling are up to date.');
+      }
+      return data;
     } catch (err) {
-      alert('Failed to save campaign');
+      toast.error('Could not save your changes', getErrorMessage(err, 'Please check your connection and try again.'));
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFileChange = async (hid: string, field: 'imageUrl' | 'videoUrl', e: React.ChangeEvent<HTMLInputElement>) => {
+  const ensureSaved = async () => {
+    if (!isDirty) return true;
+    const saved = await saveCampaign({ silent: true });
+    return Boolean(saved);
+  };
+
+  const handleFileChange = async (hid: string | number, field: 'imageUrl' | 'videoUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      try {
-        setSaving(true);
-        const { data } = await uploadsApi.upload(file);
-        updateHotspot(hid, { [field]: data.url });
-      } catch (err) {
-        alert('Failed to upload asset');
-      } finally {
-        setSaving(false);
-      }
+    if (!file) return;
+    try {
+      setSaving(true);
+      const { data } = await uploadsApi.upload(file);
+      updateHotspot(hid, { [field]: data.url });
+      toast.success('File uploaded', 'Remember to save or publish to keep it.');
+    } catch (err) {
+      toast.error('Upload failed', getErrorMessage(err, 'Try a smaller file or paste a URL instead.'));
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleSaveAndPreview = async () => {
-    await saveCampaign();
-    // Small delay to ensure state is set before navigating/opening
-    setTimeout(() => {
-      window.open(`/embed/${id}`, '_blank');
-    }, 100);
+    if (!(await ensureSaved())) return;
+    window.open(`/embed/${id}`, '_blank');
   };
-  const campaignUrl = `${window.location.origin}/embed/${id}`;
-  const embedCode = `<iframe src="${campaignUrl}" width="100%" height="600" frameborder="0"></iframe>`;
+
+  const handlePublish = async () => {
+    if (!(await ensureSaved())) return;
+    setPublishOpen(true);
+  };
+
+  const leaveEditor = () => {
+    if (isDirty) setLeaveOpen(true);
+    else navigate('/');
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-slate-50">
@@ -219,48 +385,116 @@ export default function CampaignEditor() {
   );
 
   const selectedHotspot = hotspots.find(h => h.id === selectedId);
+  const nearbyHotspot = selectedHotspot
+    ? hotspots.find((h) => h.id !== selectedHotspot.id && Math.hypot((h.x || 0) - (selectedHotspot.x || 0), (h.y || 0) - (selectedHotspot.y || 0)) < MIN_HOTSPOT_GAP)
+    : undefined;
   const activePreviewHotspot = hotspots.find(h => h.id === (hoveredId || selectedId));
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 font-sans">
       {/* Header */}
-      <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between z-20 shadow-sm">
-        <div className="flex items-center gap-6">
-          <button onClick={() => navigate('/')} className="w-10 h-10 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-all">
+      <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between gap-4 z-20 shadow-sm">
+        <div className="flex items-center gap-4 min-w-0">
+          <button
+            onClick={leaveEditor}
+            title="Back to campaigns"
+            aria-label="Back to campaigns"
+            className="w-10 h-10 shrink-0 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-all"
+          >
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
-          <div>
-            <h1 className="text-xl font-black text-slate-900">{campaign?.name}</h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Editor Mode</p>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg sm:text-xl font-black text-slate-900">{campaign?.name || 'Campaign'}</h1>
+            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
+              {saving ? (
+                <><Loader2 className="h-3 w-3 animate-spin text-blue-500" /><span className="text-blue-600">Saving…</span></>
+              ) : isDirty ? (
+                <><span className="h-2 w-2 rounded-full bg-amber-500" /><span className="text-amber-600">Unsaved changes</span></>
+              ) : (
+                <><CheckCircle2 className="h-3 w-3 text-emerald-500" /><span className="text-emerald-600">All changes saved</span></>
+              )}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setShowEmbedModal(true)} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
-            <Code className="w-4 h-4" /> Embed
+
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <button
+            onClick={() => (isDirty ? saveCampaign() : toast.info('Already saved', 'There are no unsaved changes right now.'))}
+            disabled={saving}
+            title={isDirty ? 'Save your draft' : 'Everything is already saved'}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" /> <span className="hidden sm:inline">{isDirty ? 'Save draft' : 'Saved'}</span>
           </button>
-          <button onClick={handleSaveAndPreview} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
-            <Eye className="w-4 h-4" /> Preview
+          <button
+            onClick={handleSaveAndPreview}
+            disabled={saving}
+            title="Saves, then opens what your visitors will see"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Preview</span>
           </button>
-          <button onClick={() => saveCampaign().then(() => alert('Campaign saved successfully!'))} disabled={saving} className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] disabled:opacity-50">
-            <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
+          <button
+            onClick={handlePublish}
+            disabled={saving}
+            title="Get the link or embed code to share"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+          >
+            <Share2 className="w-4 h-4" /> <span className="hidden sm:inline">Publish &amp; share</span><span className="sm:hidden">Share</span>
           </button>
         </div>
       </header>
 
+      {/* Step strip: always tells the user where they are in the flow */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-4 py-2.5 sm:px-8 z-10">
+        <StepIndicator
+          steps={[
+            { label: 'Image', done: Boolean(campaign?.imageUrl) },
+            { label: 'Hotspots', done: hotspots.length > 0, active: hotspots.length === 0 },
+            { label: 'Publish', active: hotspots.length > 0 },
+          ]}
+        />
+        <p className="text-[11px] font-medium text-slate-400">
+          {isAdding
+            ? 'Add mode: click anywhere on the image to place hotspots — keep clicking to add more. Esc or Cancel to stop.'
+            : hotspots.length === 0
+              ? 'Click anywhere on the image to place your first hotspot.'
+              : `${hotspots.length} ${hotspots.length === 1 ? 'hotspot' : 'hotspots'} placed · use + to add another, or click a dot to edit it.`}
+        </p>
+      </div>
+
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-20 bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-6 z-10">
-          <ToolButton icon={MousePointer2} active label="Select" />
+        <aside className="w-24 bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-5 z-10">
+          <ToolButton icon={MousePointer2} active label="Select" desc="Click dots to edit" />
           <div className="w-10 h-px bg-slate-100"></div>
-          <ToolButton icon={Plus} onClick={addHotspot} label="Add Hotspot" />
-          <ToolButton icon={Sparkles} onClick={() => alert("Magic scan running...")} label={isScanning ? "Scanning..." : "AI Magic Scan"} className={isScanning ? "animate-pulse text-blue-600" : ""} />
-          <ToolButton icon={Music} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Sound" />
-          <ToolButton icon={ShieldCheck} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Watermark" />
-          <ToolButton icon={Settings} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Settings" />
+          <ToolButton icon={Plus} onClick={startAdding} label="Add hotspot" desc="Click image to place dots" />
+          <ToolButton
+            icon={Sparkles}
+            onClick={() => toast.info('AI Magic Scan is coming soon', 'For now, click the image to place hotspots yourself — it takes seconds.')}
+            label="AI Magic Scan"
+            desc="Auto-tag products (soon)"
+          />
+          <ToolButton icon={Music} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Sound" desc="Background audio" />
+          <ToolButton icon={ShieldCheck} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Watermark" desc="Protect your image" />
+          <ToolButton icon={Settings} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Settings" desc="Filters & brand extras" />
         </aside>
 
         {/* Main Canvas */}
-        <main className="flex-1 relative bg-slate-100 overflow-hidden flex items-center justify-center p-24 mt-8">
+        <main className={`flex-1 relative bg-slate-100 overflow-hidden flex items-center justify-center p-24 mt-8 ${isAdding ? 'cursor-crosshair' : ''}`}>
+          {isAdding && (
+            <div className="absolute left-1/2 top-8 z-30 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl">
+              <MousePointerClick className="h-4 w-4 shrink-0 text-blue-300" />
+              <p className="text-xs font-bold">Add mode — click objects on the image to place hotspots. Keep clicking to add more.</p>
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/20"
+              >
+                Cancel · Esc
+              </button>
+            </div>
+          )}
           <div className="absolute top-8 right-8 flex flex-col gap-2 z-20">
             <button onClick={() => setScale(s => s * 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Plus className="w-5 h-5" /></button>
             <button onClick={() => setScale(s => s / 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Minus className="w-5 h-5" /></button>
@@ -268,6 +502,34 @@ export default function CampaignEditor() {
           </div>
 
           <div className="relative shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] bg-white">
+            {image && hotspots.length === 0 && !hintDismissed && (
+              <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center p-6">
+                <div className="pointer-events-auto relative w-full max-w-sm rounded-3xl border border-blue-100 bg-white/95 p-6 text-center shadow-2xl backdrop-blur">
+                  <button
+                    type="button"
+                    onClick={() => setHintDismissed(true)}
+                    aria-label="Dismiss hint"
+                    className="absolute right-3 top-3 rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                    <MousePointerClick className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-900">Click the image to add a hotspot</h3>
+                  <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-500">
+                    A hotspot is a tappable dot. Place one on a product, a sign or anywhere you want visitors to explore.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => addHotspot(image.width / 2, image.height / 2)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Or place one in the centre
+                  </button>
+                </div>
+              </div>
+            )}
             {image && (
               <div className="relative">
                 {/* Image Wrapper for Konva Stage */}
@@ -295,9 +557,12 @@ export default function CampaignEditor() {
                       key={h.id}
                       hotspot={h}
                       isSelected={h.id === selectedId}
+                      isHovered={h.id === hoveredId}
                       scale={scale}
                       stagePos={stagePos}
-                      onSelect={() => { setSelectedId(h.id); setActiveTab(filterScope === 'hotspot' ? 'filters' : 'properties'); }}
+                      imageWidth={image.width}
+                      imageHeight={image.height}
+                      onSelect={() => { setSelectedId(h.id); setActiveTab('properties'); setIsAdding(false); }}
                       onHover={() => setHoveredId(h.id)}
                       onUnhover={() => setHoveredId(null)}
                       onChange={(newPos: any) => updateHotspot(h.id, newPos)}
@@ -313,7 +578,7 @@ export default function CampaignEditor() {
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
-                      className="absolute z-[99999] pointer-events-auto"
+                      className="absolute z-[99999] pointer-events-none select-none"
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                       style={{
@@ -334,21 +599,79 @@ export default function CampaignEditor() {
         {/* Right Sidebar */}
         <aside className="w-96 bg-white border-l border-slate-200 flex flex-col z-10">
           <div className="flex border-b border-slate-100">
-            {['properties', 'filters', 'settings'].map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab as any)}
-                className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-slate-400 hover:text-slate-600'}`}>
-                {tab}
+            {[
+              { id: 'properties', label: 'Hotspot', desc: 'Edit the selected dot' },
+              { id: 'filters', label: 'Image style', desc: 'Restyle the photo' },
+              { id: 'settings', label: 'Settings', desc: 'Sound, watermark & more' },
+            ].map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 py-4 text-center transition-all ${activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-slate-400 hover:text-slate-600'}`}>
+                <span className="block text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+                <span className={`mt-0.5 block text-[8px] font-medium leading-tight ${activeTab === tab.id ? 'text-blue-400' : 'text-slate-300'}`}>{tab.desc}</span>
               </button>
             ))}
           </div>
 
           <div className="flex-1 overflow-y-auto p-8">
+            {/* Contextual guidance: tells the user what this panel is for */}
+            <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                {activeTab === 'properties'
+                  ? (selectedHotspot ? 'Editing this dot' : 'Pick a dot first')
+                  : activeTab === 'filters'
+                    ? 'Image style'
+                    : 'Campaign settings'}
+              </p>
+              <p className="mt-1 text-[11px] font-medium leading-relaxed text-blue-700/80">
+                {activeTab === 'properties'
+                  ? (selectedHotspot
+                      ? 'Everything below applies to the selected dot — what it shows, when it appears, and how it looks. Scroll to reach every option.'
+                      : 'Click a dot on the image (or one in the list below) to edit what it reveals when tapped.')
+                  : activeTab === 'filters'
+                    ? 'Slide the controls to restyle the whole image — brightness, colour, blur and more. Changes preview live and are saved with the campaign.'
+                    : 'Scroll down to add background sound, a watermark and brand extras. Uploads appear here once added.'}
+              </p>
+            </div>
             {activeTab === 'properties' ? (
               selectedHotspot ? (
                 <div className="space-y-8 pb-20">
+                  {/* Overlap warning: two dots this close are hard to hover/tap */}
+                  {nearbyHotspot && (
+                    <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-amber-900">This dot overlaps “{nearbyHotspot.title}”</p>
+                          <p className="mt-1 text-[11px] font-medium leading-relaxed text-amber-700">
+                            Dots this close are hard to hover and tap, in the editor and on your live page. Spread them apart or drag one to a clearer spot.
+                          </p>
+                          <div className="mt-2.5 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => separateHotspot(selectedHotspot, nearbyHotspot)}
+                              className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-amber-700"
+                            >
+                              Spread apart
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(nearbyHotspot.id)}
+                              className="rounded-lg border border-amber-300 bg-white/70 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-amber-800 transition-colors hover:bg-white"
+                            >
+                              Select the other dot
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Type Selection */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Hotspot Type</label>
+                    <div className="mb-4 flex items-center gap-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">What opens on tap?</label>
+                      <HelpTip text="Choose the card visitors see when this dot is opened. You can change it any time." />
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'standard', icon: MousePointer2, label: 'Standard' },
@@ -359,17 +682,26 @@ export default function CampaignEditor() {
                         { id: 'image', icon: ImageIcon, label: 'Image' },
                       ].map(type => (
                         <TypeButton key={type.id} active={selectedHotspot.type === type.id}
-                          onClick={() => handleTypeChange(selectedHotspot.id, type.id as any)} icon={type.icon} label={type.label} />
+                          onClick={() => handleTypeChange(selectedHotspot.id, type.id as any)} icon={type.icon} label={type.label}
+                          title={HOTSPOT_TYPE_HELP[type.id]} />
                       ))}
                     </div>
+                    <p className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] font-medium leading-relaxed text-blue-700">
+                      {HOTSPOT_TYPE_HELP[selectedHotspot.type] || HOTSPOT_TYPE_HELP.standard}
+                    </p>
                   </div>
 
                   {/* Icon Selection */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Hotspot Icon</label>
+                    <div className="mb-4 flex items-center gap-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Icon on the dot</label>
+                      <HelpTip text="The small symbol drawn inside the dot on the image. Pick something that hints at what opens." />
+                    </div>
                     <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl max-h-40 overflow-y-auto">
                       {ICON_LIBRARY.map((item) => (
                         <button key={item.name} onClick={() => updateHotspot(selectedHotspot.id, { iconName: item.name })}
+                          title={item.name}
+                          aria-label={`Use ${item.name} icon`}
                           className={`p-2 rounded-lg flex items-center justify-center transition-all ${selectedHotspot.iconName === item.name ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-200'}`}>
                           <item.icon className="w-4 h-4" />
                         </button>
@@ -380,7 +712,10 @@ export default function CampaignEditor() {
                   {/* Trigger */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Trigger</label>
+                      <div className="mb-3 flex items-center gap-1.5">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Opens on</label>
+                        <HelpTip text="Hover opens the card when a mouse moves over the dot. Click waits for a tap — the safer choice if most visitors are on phones." />
+                      </div>
                       <div className="flex bg-slate-50 p-1 rounded-2xl">
                         <button onClick={() => updateHotspot(selectedHotspot.id, { triggerType: 'click' })}
                           className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${selectedHotspot.triggerType === 'click' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Click</button>
@@ -389,7 +724,10 @@ export default function CampaignEditor() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Motion</label>
+                      <div className="mb-3 flex items-center gap-1.5">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dot animation</label>
+                        <HelpTip text="How the dot itself moves so visitors notice it. Pulse and Ping draw the eye without being distracting." />
+                      </div>
                       <select value={selectedHotspot.animationType || 'pulse'} onChange={e => updateHotspot(selectedHotspot.id, { animationType: e.target.value as any })}
                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-[10px] uppercase tracking-wider">
                         <option value="none">None</option>
@@ -409,7 +747,7 @@ export default function CampaignEditor() {
                     {/* Product Fields */}
                     {selectedHotspot.type === 'product' && (
                       <>
-                        <TextAreaField label="Product Info (Full Specs)" value={selectedHotspot.productInfo || ''} onChange={v => updateHotspot(selectedHotspot.id, { productInfo: v })} />
+                        <TextAreaField label="Product details" value={selectedHotspot.productInfo || ''} onChange={v => updateHotspot(selectedHotspot.id, { productInfo: v })} />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Currency</label>
@@ -422,7 +760,10 @@ export default function CampaignEditor() {
                         </div>
 
                         <div>
-                          <label id="offer-type-label" className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Offer Type</label>
+                          <div className="mb-2 flex items-center gap-1.5">
+                            <label id="offer-type-label" className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">What are you selling?</label>
+                            <HelpTip text="Product-led shows the item and its price. Service-led focuses on booking a service. Bundle shows a product and a service together." />
+                          </div>
                           <select aria-labelledby="offer-type-label" value={selectedHotspot.offerType || 'product-first'} onChange={e => updateHotspot(selectedHotspot.id, { offerType: e.target.value as any })}
                             className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold">
                             <option value="product-first">Product-led</option>
@@ -431,10 +772,13 @@ export default function CampaignEditor() {
                           </select>
                         </div>
 
-                        <FileUploadField label="Main Product Image" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
+                        <FileUploadField label="Main product image" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
 
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Additional Images</label>
+                          <div className="mb-2 flex items-center gap-1.5">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">More photos</label>
+                            <HelpTip text="Optional extra product photos. Visitors can browse through them on the product card." />
+                          </div>
                           <div className="grid grid-cols-3 gap-2">
                             {(selectedHotspot.additionalImages || []).map((img, idx) => (
                               <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
@@ -474,12 +818,12 @@ export default function CampaignEditor() {
 
                     {/* Video Fields */}
                     {selectedHotspot.type === 'video' && (
-                      <FileUploadField label="Video Content" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'videoUrl', e)} preview={selectedHotspot.videoUrl} type="video" />
+                      <FileUploadField label="Video file" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'videoUrl', e)} preview={selectedHotspot.videoUrl} type="video" />
                     )}
 
                     {/* Image Fields */}
                     {selectedHotspot.type === 'image' && (
-                      <FileUploadField label="Image Content" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
+                      <FileUploadField label="Image to show" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'imageUrl', e)} preview={selectedHotspot.imageUrl} />
                     )}
 
                     {/* Form Builder */}
@@ -487,12 +831,15 @@ export default function CampaignEditor() {
                       <>
                         <div>
                           <div className="flex items-center justify-between mb-4">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Form Fields</label>
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">What do you want to ask?</label>
+                              <HelpTip text="Rows here become the form fields visitors fill in. Name and email are pre-filled — add, rename or remove anything." />
+                            </div>
                             <button onClick={() => {
                               const newField: FormField = { id: Math.random().toString(36).substr(2, 9), type: 'text', label: 'New Field', placeholder: '', required: false };
                               updateHotspot(selectedHotspot.id, { formFields: [...(selectedHotspot.formFields || []), newField] });
                             }} className="text-blue-600 text-[10px] font-bold flex items-center gap-1 hover:text-blue-700 transition-colors">
-                              <Plus className="w-3 h-3" /> Add Field
+                              <Plus className="w-3 h-3" /> Add field
                             </button>
                           </div>
                           <div className="space-y-3">
@@ -510,18 +857,21 @@ export default function CampaignEditor() {
                             ))}
                           </div>
                         </div>
-                        <InputField label="Submit Button Text" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Subscribe" />
-                        <InputField label="Redirect URL (After Submit)" value={selectedHotspot.redirectUrl || ''} onChange={v => updateHotspot(selectedHotspot.id, { redirectUrl: v })} placeholder="https://..." />
+                        <InputField label="Button text" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Subscribe" />
+                        <InputField label="Send visitors here after submitting (optional)" value={selectedHotspot.redirectUrl || ''} onChange={v => updateHotspot(selectedHotspot.id, { redirectUrl: v })} placeholder="https://..." />
                       </>
                     )}
 
                     {selectedHotspot.type !== 'signup_form' && (
                       <>
-                        <InputField label="CTA Text" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Shop Now" />
+                        <InputField label="Button text (optional)" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Shop now" />
 
                         <div className="space-y-4 pt-2">
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Action Type</label>
+                            <div className="mb-2 flex items-center gap-1.5">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">What does the button do?</label>
+                              <HelpTip text="Link sends visitors to a web page. Scene jumps to another campaign image. Email opens their mail app. Call starts a phone call." />
+                            </div>
                             <div className="flex bg-slate-50 p-1 rounded-2xl">
                               {[
                                 { id: 'url', label: 'Link', icon: Globe },
@@ -540,21 +890,24 @@ export default function CampaignEditor() {
 
                           {selectedHotspot.action.type === 'scene' ? (
                             <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Target Scene</label>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Open which campaign?</label>
                               <select
                                 value={selectedHotspot.action.value}
                                 onChange={e => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: e.target.value } })}
                                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
                               >
-                                <option value="">Select Destination Scene</option>
-                                {allCampaigns.filter(c => c.id !== id).map(c => (
+                                <option value="">Choose a campaign</option>
+                                {allCampaigns.filter(c => String(c.id) !== String(id)).map(c => (
                                   <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                               </select>
+                              <p className="mt-1.5 text-[10px] font-medium text-slate-400">
+                                Lets visitors jump to another one of your campaign images.
+                              </p>
                             </div>
                           ) : (
                             <InputField
-                              label={selectedHotspot.action.type === 'email' ? 'Email Address' : selectedHotspot.action.type === 'phone' ? 'Phone Number' : 'Action URL'}
+                              label={selectedHotspot.action.type === 'email' ? 'Email address' : selectedHotspot.action.type === 'phone' ? 'Phone number' : 'Where should the button go?'}
                               value={selectedHotspot.action.value}
                               onChange={v => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: v } })}
                               placeholder={selectedHotspot.action.type === 'email' ? 'hello@example.com' : selectedHotspot.action.type === 'phone' ? '+1234567890' : 'https://...'}
@@ -567,23 +920,69 @@ export default function CampaignEditor() {
 
                   {/* Styling */}
                   <div className="pt-8 border-t border-slate-100 space-y-6">
+                    <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Look &amp; feel <HelpTip text="These styles apply to the dot on the image. The card content follows the same colours." />
+                    </p>
                     <div className="grid grid-cols-2 gap-4">
-                      <ColorPicker label="Background" value={selectedHotspot.backgroundColor || '#2563eb'} onChange={v => updateHotspot(selectedHotspot.id, { backgroundColor: v })} />
-                      <ColorPicker label="Icon Color" value={selectedHotspot.iconColor || '#ffffff'} onChange={v => updateHotspot(selectedHotspot.id, { iconColor: v })} />
+                      <ColorPicker label="Dot colour" value={selectedHotspot.backgroundColor || '#2563eb'} onChange={v => updateHotspot(selectedHotspot.id, { backgroundColor: v })} />
+                      <ColorPicker label="Icon colour" value={selectedHotspot.iconColor || '#ffffff'} onChange={v => updateHotspot(selectedHotspot.id, { iconColor: v })} />
                     </div>
-                    <SliderField label="Size" value={selectedHotspot.width || 12} min={5} max={50} onChange={v => updateHotspot(selectedHotspot.id, { width: v, height: v })} />
-                    <SliderField label="Roundness" value={selectedHotspot.roundness || 100} min={0} max={100} onChange={v => updateHotspot(selectedHotspot.id, { roundness: v })} />
+                    <SliderField label="Dot size" value={selectedHotspot.width || 12} min={5} max={50} onChange={v => updateHotspot(selectedHotspot.id, { width: v, height: v })} />
+                    <SliderField label="Corner roundness" value={selectedHotspot.roundness || 100} min={0} max={100} onChange={v => updateHotspot(selectedHotspot.id, { roundness: v })} />
                   </div>
 
-                  <button onClick={() => deleteHotspot(selectedHotspot.id)} className="w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2">
-                    <Trash2 className="w-5 h-5" /> Delete Hotspot
+                  <button onClick={() => setHotspotToDelete(selectedHotspot)} className="w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2">
+                    <Trash2 className="w-5 h-5" /> Delete hotspot
                   </button>
                 </div>
               ) : (
-                <EmptyState />
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-50 text-slate-300">
+                    <MousePointer2 className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {hotspots.length === 0 ? 'No hotspots yet' : 'Select a hotspot'}
+                  </h3>
+                  <p className="mx-auto mt-2 max-w-[240px] text-sm font-medium leading-relaxed text-slate-500">
+                    {hotspots.length === 0
+                      ? 'Click anywhere on your image to place a dot. Then choose what it reveals: a product, form, video or note.'
+                      : 'Click a dot on the image — or pick one below — to edit its content, trigger and styling.'}
+                  </p>
+                  {hotspots.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => addHotspot(image ? image.width / 2 : 100, image ? image.height / 2 : 100)}
+                      className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Place a hotspot in the centre
+                    </button>
+                  ) : (
+                    <div className="mt-6 w-full space-y-2">
+                      {hotspots.map((h, index) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => setSelectedId(h.id)}
+                          className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[10px] font-black text-slate-400 shadow-sm">
+                            {index + 1}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-bold text-slate-800">{h.title || 'Untitled hotspot'}</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              {(h.type || 'standard').replace('_', ' ')}
+                            </span>
+                          </span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )
             ) : activeTab === 'filters' ? (
-              <FilterPanel filters={filters} setFilters={setFilters} selectedHotspot={selectedHotspot} updateHotspot={updateHotspot} />
+              <FilterPanel filters={filters} setFilters={setFilters} />
             ) : (
               <SettingsPanel campaign={campaign} setCampaign={setCampaign} />
             )}
@@ -591,7 +990,45 @@ export default function CampaignEditor() {
         </aside>
       </div>
 
-      <EmbedModal show={showEmbedModal} onClose={() => setShowEmbedModal(false)} code={embedCode} url={campaignUrl} />
+      <PublishModal
+        open={publishOpen}
+        onClose={() => setPublishOpen(false)}
+        campaignId={id || ''}
+        campaignName={campaign?.name || 'Your campaign'}
+      />
+
+      <ConfirmDialog
+        open={leaveOpen}
+        title="Leave without saving?"
+        description="You have changes that are not saved yet. Save them, discard them, or stay here and keep editing."
+        confirmLabel="Save & leave"
+        cancelLabel="Keep editing"
+        discardLabel="Discard changes"
+        loading={saving}
+        onConfirm={async () => {
+          const saved = await saveCampaign({ silent: true });
+          if (saved) {
+            setLeaveOpen(false);
+            navigate('/');
+          }
+        }}
+        onCancel={() => setLeaveOpen(false)}
+        onDiscard={() => {
+          setLeaveOpen(false);
+          navigate('/');
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(hotspotToDelete)}
+        title="Delete this hotspot?"
+        description={hotspotToDelete ? `“${hotspotToDelete.title || 'Untitled hotspot'}” will be removed from the image. This cannot be undone.` : ''}
+        confirmLabel="Delete hotspot"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={() => hotspotToDelete && deleteHotspot(hotspotToDelete.id)}
+        onCancel={() => setHotspotToDelete(null)}
+      />
     </div>
   );
 }
@@ -703,40 +1140,109 @@ function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
 }
 
 /* ─── Editor Hotspot Marker (HTML) ─── */
-function EditorHotspotMarker({ hotspot, isSelected, scale, stagePos, onSelect, onHover, onUnhover, onChange }: any) {
+function EditorHotspotMarker({ hotspot, isSelected, isHovered, scale, stagePos, imageWidth, imageHeight, onSelect, onHover, onUnhover, onChange }: any) {
   const size = hotspot.width || 12;
   const cornerRadius = (size * (hotspot.roundness || 100)) / 100;
   const HotspotIcon = hotspot.iconName ? (ICON_LIBRARY.find(i => i.name === hotspot.iconName)?.icon || Info) : null;
   const animType = hotspot.animationType || 'pulse';
 
-  // Use Framer Motion for dragging in the editor
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0, originX: 0, originY: 0, moved: false });
+
+  // Keep the invisible tap target honest: big enough to grab, small enough that
+  // two neighbouring dots do not fight over the same pixels.
+  const hitSize = Math.max(32, size * 2 * scale + 12);
+
+  const clamp = (x: number, y: number) => ({
+    x: imageWidth ? Math.min(Math.max(x, 16), imageWidth - 16) : x,
+    y: imageHeight ? Math.min(Math.max(y, 16), imageHeight - 16) : y,
+  });
+
+  const handlePointerDown = (e: any) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: hotspot.x || 0,
+      originY: hotspot.y || 0,
+      moved: false,
+    };
+    setDragging(true);
+    onSelect();
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (!dragging) return;
+    e.stopPropagation();
+    const dx = (e.clientX - dragRef.current.startX) / scale;
+    const dy = (e.clientY - dragRef.current.startY) / scale;
+    if (!dragRef.current.moved && Math.hypot(dx, dy) < 2 / scale) return;
+    dragRef.current.moved = true;
+    const next = clamp(dragRef.current.originX + dx, dragRef.current.originY + dy);
+    onChange(next);
+  };
+
+  const handlePointerUp = (e: any) => {
+    if (!dragging) return;
+    e.stopPropagation();
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    setDragging(false);
+    // The pointer may have been released outside the dot; drop hover so the
+    // editor preview does not stay pinned to a marker you already let go of.
+    onUnhover();
+  };
+
+  const handleKeyDown = (e: any) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect();
+      return;
+    }
+    const step = e.shiftKey ? 10 : 2;
+    const deltas: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    const delta = deltas[e.key];
+    if (!delta) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = clamp((hotspot.x || 0) + delta[0], (hotspot.y || 0) + delta[1]);
+    onChange(next);
+    onSelect();
+  };
+
   return (
-    <motion.div
-      drag
-      dragMomentum={false}
-      onDragStart={onSelect}
-      onTap={onSelect}
-      onPointerDown={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${hotspot.title || 'Hotspot'}. Drag to move, or use the arrow keys to nudge.`}
+      title={`${hotspot.title || 'Hotspot'} — drag to move`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onKeyDown={handleKeyDown}
       onClick={(e) => e.stopPropagation()}
-      onDragEnd={(_e, info) => {
-        // Convert the screen delta to stage coordinates
-        const newX = hotspot.x + (info.offset.x / scale);
-        const newY = hotspot.y + (info.offset.y / scale);
-        onChange({ x: newX, y: newY });
-      }}
-      className="absolute flex items-center justify-center group pointer-events-auto"
+      onMouseDown={(e) => e.stopPropagation()}
+      onDragStart={(e) => e.preventDefault()}
       onMouseEnter={onHover}
-      onMouseLeave={onUnhover}
+      onMouseLeave={() => { if (!dragging) onUnhover(); }}
+      className="absolute flex items-center justify-center group outline-none pointer-events-auto focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-full"
       style={{
         left: `${(hotspot.x * scale) + stagePos.x}px`,
         top: `${(hotspot.y * scale) + stagePos.y}px`,
-        // Larger invisible hit area (min 40px)
-        width: `${Math.max(40, size * 4 * scale)}px`,
-        height: `${Math.max(40, size * 4 * scale)}px`,
+        width: `${hitSize}px`,
+        height: `${hitSize}px`,
         transform: 'translate(-50%, -50%)',
-        cursor: isSelected ? 'grabbing' : 'grab',
-        zIndex: isSelected ? 100 : 10
+        cursor: dragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
+        zIndex: isSelected ? 100 : isHovered ? 50 : 10,
       }}
     >
       {/* Visual Animation Rings */}
@@ -780,7 +1286,7 @@ function EditorHotspotMarker({ hotspot, isSelected, scale, stagePos, onSelect, o
           </div>
         )}
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -827,11 +1333,19 @@ function FormFieldEditor({ field, onUpdate, onDelete }: { field: FormField; onUp
 }
 
 /* ─── Filter Panel ─── */
-function FilterPanel({ filters, setFilters, selectedHotspot, updateHotspot }: any) {
+function FilterPanel({ filters, setFilters }: any) {
   return (
     <div className="space-y-8 pb-20">
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-blue-700">
+          Image style <HelpTip text="These effects change how the whole image looks. They do not change the hotspots — use them to match your brand or fix a dull photo." />
+        </p>
+        <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-blue-700/80">
+          Adjust the photo behind your hotspots. Changes preview instantly and are saved with the campaign.
+        </p>
+      </div>
       <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Image Filters</label>
+        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Adjustments</label>
         <div className="space-y-6">
           <SliderField label="Brightness" value={filters.brightness} min={-1} max={1} step={0.05} onChange={(v: number) => setFilters({ ...filters, brightness: v })} />
           <SliderField label="Contrast" value={filters.contrast} min={-100} max={100} step={5} onChange={(v: number) => setFilters({ ...filters, contrast: v })} />
@@ -845,32 +1359,34 @@ function FilterPanel({ filters, setFilters, selectedHotspot, updateHotspot }: an
         </div>
       </div>
       <div className="space-y-4 pt-6 border-t border-slate-100">
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Toggle Filters</label>
-        <ToggleField label="Grayscale" checked={filters.grayscale} onChange={(v: boolean) => setFilters({ ...filters, grayscale: v })} />
-        <ToggleField label="Sepia" checked={filters.sepia} onChange={(v: boolean) => setFilters({ ...filters, sepia: v })} />
-        <ToggleField label="Invert" checked={filters.invert} onChange={(v: boolean) => setFilters({ ...filters, invert: v })} />
+        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Quick looks</label>
+        <ToggleField label="Black & white" checked={filters.grayscale} onChange={(v: boolean) => setFilters({ ...filters, grayscale: v })} />
+        <ToggleField label="Warm / sepia" checked={filters.sepia} onChange={(v: boolean) => setFilters({ ...filters, sepia: v })} />
+        <ToggleField label="Invert colours" checked={filters.invert} onChange={(v: boolean) => setFilters({ ...filters, invert: v })} />
       </div>
       <button onClick={() => setFilters({ brightness: 0, contrast: 0, blur: 0, grayscale: false, sepia: false, invert: false, hue: 0, saturation: 0, opacity: 1, noise: 0, pixelSize: 1, vignette: 0 })}
         className="w-full py-3 bg-slate-50 text-slate-500 font-bold rounded-2xl hover:bg-slate-100 transition-all text-xs uppercase tracking-widest">
-        Reset All Filters
+        Reset all filters
       </button>
     </div>
   );
 }
 
 /* ─── UI Primitives ─── */
-function ToolButton({ icon: Icon, active, onClick, label, className }: any) {
+function ToolButton({ icon: Icon, active, onClick, label, desc, className }: any) {
   return (
-    <button onClick={onClick} className={`relative group p-3 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'} ${className}`}>
+    <button onClick={onClick} className={`relative group flex flex-col items-center gap-1 px-1 py-2 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'} ${className}`}>
       <Icon className="w-6 h-6" />
-      <div className="absolute left-full ml-4 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap uppercase tracking-widest z-50">{label}</div>
+      <span className={`text-[8px] font-black uppercase tracking-wide leading-tight text-center ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>{label}</span>
+      {desc && <span className={`text-[7px] font-medium leading-tight text-center ${active ? 'text-blue-100' : 'text-slate-300 group-hover:text-slate-400'}`}>{desc}</span>}
+      <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">{desc ? `${label} — ${desc}` : label}</div>
     </button>
   );
 }
 
-function TypeButton({ active, onClick, icon: Icon, label }: any) {
+function TypeButton({ active, onClick, icon: Icon, label, title }: any) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${active ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+    <button onClick={onClick} title={title} aria-pressed={active} className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${active ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
       <Icon className="w-5 h-5" />
       <span className="text-[10px] font-black uppercase tracking-widest leading-tight text-center">{label}</span>
     </button>
@@ -954,18 +1470,9 @@ function ToggleField({ label, checked, onChange }: any) {
   );
 }
 
-function EmptyState() {
-  return (
-    <div className="h-full flex flex-col items-center justify-center text-center">
-      <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-4"><MousePointer2 className="w-8 h-8 text-slate-200" /></div>
-      <h3 className="text-lg font-bold text-slate-900">Select a hotspot</h3>
-      <p className="text-slate-400 text-sm max-w-[200px] mx-auto mt-2">Add or click a hotspot to start configuring.</p>
-    </div>
-  );
-}
-
 function SettingsPanel({ campaign, setCampaign }: any) {
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   const handleFileUpload = async (field: 'watermarkUrl' | 'soundUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -974,8 +1481,9 @@ function SettingsPanel({ campaign, setCampaign }: any) {
         setSaving(true);
         const { data } = await uploadsApi.upload(file);
         setCampaign({ ...campaign, [field]: data.url });
+        toast.success(field === 'watermarkUrl' ? 'Watermark added' : 'Sound added', 'Save the draft to keep this change.');
       } catch (err) {
-        alert('Failed to upload asset');
+        toast.error('Upload failed', getErrorMessage(err, 'Try a smaller file and make sure it is the right type.'));
       } finally {
         setSaving(false);
       }
@@ -984,106 +1492,37 @@ function SettingsPanel({ campaign, setCampaign }: any) {
 
   return (
     <div className="space-y-8">
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">Brand extras</p>
+        <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-blue-700/80">
+          Optional touches that show alongside your image and hotspots. Both are saved with the campaign.
+        </p>
+      </div>
       <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <div className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4" /> Watermark
-        </label>
+          <HelpTip text="A small logo placed on the bottom-right of your image. Use a transparent PNG for the best result." />
+        </div>
         <FileUploadField
-          label="Upload Watermark"
+          label="Upload watermark image"
           onUpload={(e: any) => handleFileUpload('watermarkUrl', e)}
           preview={campaign?.watermarkUrl}
         />
         <div className="mt-2 text-[10px] text-slate-400 font-medium">Shows on the bottom right of the image.</div>
       </div>
       <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Music className="w-4 h-4" /> Sound
-        </label>
+        <div className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <Music className="w-4 h-4" /> Click sound
+          <HelpTip text="A short sound that plays when a visitor opens a hotspot. Keep it brief and quiet — some browsers block autoplay until the first tap." />
+        </div>
         <FileUploadField
-          label="Upload UI Sound"
+          label="Upload UI sound"
           onUpload={(e: any) => handleFileUpload('soundUrl', e)}
           preview={campaign?.soundUrl}
           type="sound"
         />
-        <div className="mt-2 text-[10px] text-slate-400 font-medium">Plays when hotspots are interacted with.</div>
+        <div className="mt-2 text-[10px] text-slate-400 font-medium">Plays when hotspots are opened.</div>
       </div>
     </div>
-  );
-}
-
-function EmbedModal({ show, onClose, code, url }: { show: boolean; onClose: () => void; code: string; url: string }) {
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  return (
-    <AnimatePresence>
-      {show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden my-8">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-slate-900">Deployment</h2>
-              <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X className="w-6 h-6 text-slate-400" /></button>
-            </div>
-
-            <div className="p-8 space-y-8">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Direct Campaign URL</label>
-                <div className="flex gap-2">
-                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 truncate">{url}</div>
-                  <button onClick={() => copyToClipboard(url, 'url')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2">
-                    {copied === 'url' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Embed Code (Iframe)</label>
-                <div className="flex gap-2">
-                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 break-all h-24 overflow-y-auto">{code}</div>
-                  <button onClick={() => copyToClipboard(code, 'code')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2 h-fit py-4">
-                    {copied === 'code' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Direct HTML Link</label>
-                <div className="flex gap-2">
-                  <div className="flex-1 p-4 bg-slate-50 rounded-2xl border border-slate-100 font-mono text-xs text-slate-600 truncate">
-                    {`<a href="${url}" target="_blank">View Hotspot Campaign</a>`}
-                  </div>
-                  <button onClick={() => copyToClipboard(`<a href="${url}" target="_blank">View Hotspot Campaign</a>`, 'html')} className="px-6 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all flex items-center gap-2">
-                    {copied === 'html' ? <CheckCircle className="w-4 h-4" /> : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 rounded-3xl p-6 border border-blue-100">
-                <h4 className="font-black text-blue-900 text-sm mb-4 flex items-center gap-2"><Globe className="w-5 h-5" /> Deployment Instructions</h4>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">MCOM Properties</p>
-                    <p className="text-sm text-blue-600">Paste the iframe code into your CMS editor or use the custom HTML component in your page builder.</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">External Websites</p>
-                    <p className="text-sm text-blue-600">Ensure the domain is verified in your <button className="underline font-black" onClick={() => (window.location.href = '/domains')}>Domain Settings</button> before embedding.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 bg-slate-50 border-t border-slate-100">
-              <button onClick={onClose} className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all">Done</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
   );
 }

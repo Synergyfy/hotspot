@@ -25,16 +25,30 @@ let AnalyticsService = class AnalyticsService {
             },
         });
     }
-    async getStats(campaignId) {
-        const events = await this.prisma.analyticsEvent.groupBy({
-            by: ['eventType'],
-            where: { campaignId },
-            _count: true,
+    async getStats(campaignId, userId) {
+        const campaign = await this.prisma.campaign.findUnique({
+            where: { id: campaignId },
+            select: { userId: true },
         });
-        const leadsCount = await this.prisma.lead.count({
-            where: { campaignId },
-        });
-        return { events, leads: leadsCount };
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
+        if (campaign.userId !== userId) {
+            throw new common_1.ForbiddenException('You do not have access to this campaign');
+        }
+        const [summary, events, leads] = await Promise.all([
+            this.prisma.analyticsEvent.groupBy({
+                by: ['eventType'],
+                where: { campaignId },
+                _count: true,
+            }),
+            this.prisma.analyticsEvent.findMany({
+                where: { campaignId },
+                orderBy: { timestamp: 'asc' },
+                take: 500,
+            }),
+            this.prisma.lead.count({ where: { campaignId } }),
+        ]);
+        return { summary, events, leads };
     }
 };
 exports.AnalyticsService = AnalyticsService;

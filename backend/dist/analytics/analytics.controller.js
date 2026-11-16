@@ -16,6 +16,7 @@ exports.AnalyticsController = void 0;
 const common_1 = require("@nestjs/common");
 const analytics_service_1 = require("./analytics.service");
 const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
+const get_user_decorator_1 = require("../common/decorators/get-user.decorator");
 let AnalyticsController = class AnalyticsController {
     analyticsService;
     constructor(analyticsService) {
@@ -24,8 +25,8 @@ let AnalyticsController = class AnalyticsController {
     logEvent(campaignId, body) {
         return this.analyticsService.logEvent(+campaignId, body);
     }
-    getStats(campaignId) {
-        return this.analyticsService.getStats(+campaignId);
+    getStats(campaignId, userId) {
+        return this.analyticsService.getStats(+campaignId, userId);
     }
 };
 exports.AnalyticsController = AnalyticsController;
@@ -41,8 +42,9 @@ __decorate([
     (0, common_1.Get)(':campaignId'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Param)('campaignId')),
+    __param(1, (0, get_user_decorator_1.GetUser)('userId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Number]),
     __metadata("design:returntype", void 0)
 ], AnalyticsController.prototype, "getStats", null);
 exports.AnalyticsController = AnalyticsController = __decorate([

@@ -13,22 +13,42 @@ exports.CampaignsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 function toDbHotspot(h) {
-    const { id, campaignId, createdAt, updatedAt, action, currency, triggerType, iconName, iconColor, backgroundColor, pulseAnimation, roundness, formFields, redirectUrl, width, height, imageUrl, videoUrl, price, ctaText, description, radius, filters, ...rest } = h;
     const config = {};
     const configSource = {
-        currency, triggerType, iconName, iconColor, backgroundColor,
-        pulseAnimation, roundness, formFields, redirectUrl,
-        imageUrl, videoUrl, price, ctaText, description, radius,
-        width, height, filters,
+        currency: h.currency,
+        triggerType: h.triggerType,
+        iconName: h.iconName,
+        iconColor: h.iconColor,
+        backgroundColor: h.backgroundColor,
+        animationType: h.animationType,
+        pulseAnimation: h.pulseAnimation,
+        roundness: h.roundness,
+        formFields: h.formFields,
+        redirectUrl: h.redirectUrl,
+        width: h.width,
+        height: h.height,
+        imageUrl: h.imageUrl,
+        videoUrl: h.videoUrl,
+        price: h.price,
+        ctaText: h.ctaText,
+        description: h.description,
+        radius: h.radius,
+        filters: h.filters,
+        productInfo: h.productInfo,
+        additionalImages: h.additionalImages,
+        offerType: h.offerType,
     };
-    for (const [k, v] of Object.entries(configSource)) {
-        if (v !== undefined)
-            config[k] = v;
+    for (const [key, value] of Object.entries(configSource)) {
+        if (value !== undefined)
+            config[key] = value;
     }
     return {
-        ...rest,
-        actionType: action?.type ?? 'url',
-        actionValue: action?.value ?? '',
+        x: Number(h.x) || 0,
+        y: Number(h.y) || 0,
+        type: h.type || 'standard',
+        title: h.title || 'Hotspot',
+        actionType: h.action?.type ?? 'url',
+        actionValue: h.action?.value ?? '',
         config,
     };
 }
@@ -74,11 +94,16 @@ let CampaignsService = class CampaignsService {
         });
         return campaigns.map(toFrontendCampaign);
     }
-    async findOne(id) {
+    async findOne(id, userId) {
         const campaign = await this.prisma.campaign.findUnique({
             where: { id },
             include: { hotspots: true },
         });
+        if (!campaign)
+            throw new common_1.NotFoundException('Campaign not found');
+        if (userId !== undefined && campaign.userId !== userId) {
+            throw new common_1.ForbiddenException('You do not have access to this campaign');
+        }
         return toFrontendCampaign(campaign);
     }
     async update(id, userId, data) {
@@ -95,7 +120,7 @@ let CampaignsService = class CampaignsService {
             where: { campaignId: id, id: { notIn: incomingIds } },
         });
         await Promise.all(existingHotspots.map((h) => {
-            const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
+            const hotspotData = toDbHotspot(h);
             return this.prisma.hotspot.update({
                 where: { id: h.id },
                 data: hotspotData,

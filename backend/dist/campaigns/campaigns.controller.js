@@ -28,8 +28,8 @@ let CampaignsController = class CampaignsController {
     findAll(userId) {
         return this.campaignsService.findAll(userId);
     }
-    findOne(id) {
-        return this.campaignsService.findOne(+id);
+    findOne(id, userId) {
+        return this.campaignsService.findOne(+id, userId);
     }
     update(id, userId, body) {
         return this.campaignsService.update(+id, userId, body);
@@ -60,8 +60,9 @@ __decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, get_user_decorator_1.GetUser)('userId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Number]),
     __metadata("design:returntype", void 0)
 ], CampaignsController.prototype, "findOne", null);
 __decorate([

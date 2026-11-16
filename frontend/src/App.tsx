@@ -7,6 +7,8 @@ import Analytics from './components/Analytics';
 import HotspotRenderer from './components/HotspotRenderer';
 import DomainManagement from './components/DomainManagement';
 import LeadsManager from './components/LeadsManager';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { ToastProvider } from './components/ui/Toast';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -15,7 +17,7 @@ export default function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-    
+
     if (savedUser && token) {
       try {
         setUser(JSON.parse(savedUser));
@@ -30,16 +32,20 @@ export default function App() {
   if (loading) return <div className="flex items-center justify-center h-screen bg-zinc-950 text-white">Loading...</div>;
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-        <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
-        <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
-        <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
-        <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
-        <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
-        <Route path="/embed/:id" element={<HotspotRenderer />} />
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
+            <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
+            <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
+            <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
+            <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
+            <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
+            <Route path="/embed/:id" element={<HotspotRenderer />} />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

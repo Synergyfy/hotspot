@@ -21,8 +21,8 @@ export class CampaignsController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string) {
-    return this.campaignsService.findOne(+id);
+  findOne(@Param('id') id: string, @GetUser('userId') userId: number) {
+    return this.campaignsService.findOne(+id, userId);
   }
 
   @Patch(':id')

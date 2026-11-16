@@ -20,13 +20,27 @@ let LeadsService = class LeadsService {
     async create(data) {
         return this.prisma.lead.create({ data });
     }
-    async findAll(userId) {
+    async findAll(userId, campaignId) {
         return this.prisma.lead.findMany({
             where: {
                 campaign: { userId },
+                ...(campaignId ? { campaignId } : {}),
             },
             include: { campaign: true },
+            orderBy: { createdAt: 'desc' },
         });
+    }
+    async remove(id, userId) {
+        const lead = await this.prisma.lead.findUnique({
+            where: { id },
+            include: { campaign: { select: { userId: true } } },
+        });
+        if (!lead)
+            throw new common_1.NotFoundException('Lead not found');
+        if (lead.campaign.userId !== userId) {
+            throw new common_1.ForbiddenException('You do not have access to this lead');
+        }
+        return this.prisma.lead.delete({ where: { id } });
     }
 };
 exports.LeadsService = LeadsService;

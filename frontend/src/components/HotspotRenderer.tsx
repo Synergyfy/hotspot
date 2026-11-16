@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, Hotspot, AnalyticsEvent, Lead, Domain, FormField } from '../types';
-import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe, ChevronLeft, ChevronRight, Loader2, RefreshCw, Home, AlertCircle, MousePointerClick } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { publicApi, analyticsApi, leadsApi, domainsApi } from '../api/services';
+import { getErrorMessage } from '../lib/errors';
+import { onboarding, viewerHint } from '../lib/onboarding';
 
 const ICON_MAP: Record<string, any> = {
   Info, ShoppingCart, Play, Mail, Type, ImageIcon, FileText, MousePointer2, Globe, ExternalLink,
@@ -18,9 +20,17 @@ export default function HotspotRenderer() {
   const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(null);
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [leadCaptured, setLeadCaptured] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(true);
+  const [showHint, setShowHint] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const viewTracked = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageWrapRef = useRef<HTMLDivElement>(null);
+  const [imageBoxWidth, setImageBoxWidth] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -28,12 +38,24 @@ export default function HotspotRenderer() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
+
     const fetchCampaign = async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         const { data: found } = await publicApi.getCampaign(id);
+        if (cancelled) return;
         setCampaign(found);
 
-        const referrer = document.referrer ? new URL(document.referrer).hostname : '';
+        onboarding.markPreviewed();
+
+        let referrer = '';
+        try {
+          referrer = document.referrer ? new URL(document.referrer).hostname : '';
+        } catch {
+          referrer = '';
+        }
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
         if (!isLocal && referrer && localStorage.getItem('token')) {
@@ -41,7 +63,7 @@ export default function HotspotRenderer() {
             const { data: allDomains } = await domainsApi.findAll();
             const userDomains = allDomains.filter((d: Domain) => d.userId === found.userId && d.verified);
             if (!userDomains.some((d: Domain) => d.name === referrer)) {
-              setIsAuthorized(false);
+              if (!cancelled) setIsAuthorized(false);
               return;
             }
           } catch (err) {
@@ -49,22 +71,65 @@ export default function HotspotRenderer() {
           }
         }
 
-        trackEvent(found.id, 'view', undefined, referrer || window.location.hostname);
+        if (cancelled) return;
+
+        // Show the "tap the dots" hint once per campaign per browser.
+        if ((found.hotspots?.length || 0) > 0 && !viewerHint.isDismissed(found.id)) {
+          setShowHint(true);
+        }
+
+        // One view per page load, even in React StrictMode double-renders.
+        if (!viewTracked.current) {
+          viewTracked.current = true;
+          trackEvent(found.id, 'view', undefined, referrer || window.location.hostname);
+        }
       } catch (err) {
-        console.error('Campaign not found', err);
+        if (!cancelled) {
+          setLoadError(
+            getErrorMessage(err, 'This campaign could not be loaded. The link may be wrong, or the campaign was deleted.'),
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchCampaign();
-  }, [id]);
 
-  const trackEvent = async (campaignId: string | number, type: 'view' | 'click' | 'cta', hotspotId?: string, domainName?: string) => {
-    const referrer = domainName || (document.referrer ? new URL(document.referrer).hostname : window.location.hostname);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadKey]);
+
+  useEffect(() => {
+    if (!showHint) return;
+    const timer = window.setTimeout(() => setShowHint(false), 9000);
+    return () => window.clearTimeout(timer);
+  }, [showHint]);
+
+  // Measure the image itself (not the whole browser window) so hover cards
+  // open on the side that actually has room.
+  useEffect(() => {
+    const el = imageWrapRef.current;
+    if (!el) return;
+    const update = () => setImageBoxWidth(el.clientWidth);
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [campaign?.imageUrl]);
+
+  const trackEvent = async (campaignId: string | number, type: 'view' | 'click' | 'cta', hotspotId?: string | number, domainName?: string) => {
+    let fallbackDomain = window.location.hostname;
+    try {
+      fallbackDomain = document.referrer ? new URL(document.referrer).hostname : fallbackDomain;
+    } catch {
+      // Keep the current hostname when the referrer is malformed.
+    }
     try {
       await analyticsApi.logEvent(campaignId, {
         eventType: type,
-        domain: referrer,
+        domain: domainName || fallbackDomain,
         metadata: { hotspotId: hotspotId || activeHotspot?.id }
       });
     } catch (err) {
@@ -72,10 +137,17 @@ export default function HotspotRenderer() {
     }
   };
 
+  const dismissHint = () => {
+    setShowHint(false);
+    if (id) viewerHint.dismiss(id);
+  };
+
   const hoverTimeoutRef = useRef<any>(null);
   const clearHoverTimeout = () => { if (hoverTimeoutRef.current) { clearTimeout(hoverTimeoutRef.current); hoverTimeoutRef.current = null; } };
 
   const handleHotspotInteraction = (hotspot: Hotspot, interactionType: 'click' | 'hover') => {
+    setFormError(null);
+    dismissHint();
     if (interactionType === 'hover') {
       clearHoverTimeout();
       setHoveredHotspot(hotspot);
@@ -96,16 +168,29 @@ export default function HotspotRenderer() {
     if (!id || !campaign) return;
     const hs = activeHotspot || hoveredHotspot;
     if (!hs) return;
+
     const formData = new FormData(e.currentTarget);
     const data: Record<string, string> = {};
     formData.forEach((value, key) => {
       data[key] = value.toString();
     });
 
+    const email = data.email || data.Email || '';
+    if (!email.trim()) {
+      setFormError('Please enter your email so we can get back to you.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFormError('That email address does not look right. Please check it and try again.');
+      return;
+    }
+
+    setFormError(null);
+    setSubmitting(true);
     try {
       await leadsApi.create({
         campaignId: +id,
-        email: data.email || data.Email || '',
+        email: email.trim(),
         name: data.name || data.Name || 'Anonymous',
         data
       });
@@ -116,10 +201,12 @@ export default function HotspotRenderer() {
       if (hs.redirectUrl) {
         setTimeout(() => { window.location.href = hs.redirectUrl!; }, 1500);
       } else {
-        setTimeout(() => { setActiveHotspot(null); setHoveredHotspot(null); setLeadCaptured(false); }, 2000);
+        setTimeout(() => { setActiveHotspot(null); setHoveredHotspot(null); setLeadCaptured(false); }, 2500);
       }
     } catch (err) {
-      alert('Failed to submit lead');
+      setFormError(getErrorMessage(err, 'We could not send that just now. Please try again in a moment.'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -147,20 +234,77 @@ export default function HotspotRenderer() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen bg-white"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
-  if (!isAuthorized) return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-8 text-center">
-      <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mb-6"><ShieldAlert className="w-10 h-10 text-red-500" /></div>
-      <h1 className="text-2xl font-black text-slate-900 mb-2">Unauthorized Domain</h1>
-      <p className="text-slate-500 max-w-sm font-medium">This interactive image cannot be displayed on this domain.</p>
+  if (loading) return (
+    <div className="flex h-screen flex-col items-center justify-center gap-3 bg-white">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Opening campaign</p>
     </div>
   );
-  if (!campaign) return <div className="p-8 text-center text-slate-500 font-bold">Campaign not found.</div>;
+
+  if (!isAuthorized) return (
+    <div className="flex h-screen flex-col items-center justify-center bg-slate-50 p-8 text-center">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-50">
+        <ShieldAlert className="h-10 w-10 text-red-500" />
+      </div>
+      <h1 className="mb-2 text-2xl font-black text-slate-900">This image is not available on this site</h1>
+      <p className="max-w-sm font-medium leading-relaxed text-slate-500">
+        The owner has not allowed this website to show the campaign. If this is your campaign, add and verify this domain in
+        Domains, or open the preview link directly.
+      </p>
+      <button
+        type="button"
+        onClick={() => navigate('/domains')}
+        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+      >
+        <Globe className="h-4 w-4" /> Manage domains
+      </button>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="flex h-screen flex-col items-center justify-center bg-slate-50 p-8 text-center">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-50">
+        <AlertCircle className="h-10 w-10 text-amber-500" />
+      </div>
+      <h1 className="mb-2 text-2xl font-black text-slate-900">We could not open this campaign</h1>
+      <p className="max-w-md font-medium leading-relaxed text-slate-500">{loadError}</p>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => setReloadKey((key) => key + 1)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+        >
+          <RefreshCw className="h-4 w-4" /> Try again
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          <Home className="h-4 w-4" /> Go to ClickSIP
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!campaign) return (
+    <div className="flex h-screen flex-col items-center justify-center bg-slate-50 p-8 text-center">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-100">
+        <ImageIcon className="h-10 w-10 text-slate-300" />
+      </div>
+      <h1 className="mb-2 text-2xl font-black text-slate-900">Campaign not found</h1>
+      <p className="max-w-sm font-medium leading-relaxed text-slate-500">
+        This link may be old or the campaign may have been deleted. Ask the sender for a fresh link.
+      </p>
+    </div>
+  );
 
   const getFilterString = (filters: any) => {
     if (!filters) return '';
     return `brightness(${1 + (filters.brightness || 0)}) contrast(${100 + (filters.contrast || 0)}%) blur(${filters.blur || 0}px) hue-rotate(${filters.hue || 0}deg) saturate(${1 + (filters.saturation || 0)}) opacity(${filters.opacity ?? 1}) ${filters.grayscale ? 'grayscale(100%)' : ''} ${filters.sepia ? 'sepia(100%)' : ''} ${filters.invert ? 'invert(100%)' : ''}`.replace(/\s+/g, ' ').trim();
   };
+
+  const hoverCardOnRight = !!hoveredHotspot && imageBoxWidth > 0 && hoveredHotspot.x > imageBoxWidth / 2;
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden flex items-center justify-center font-sans cursor-default select-none"
@@ -173,7 +317,7 @@ export default function HotspotRenderer() {
         style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}>
 
         {/* Wrapper for image and built-in filters to keep rounded corners without clipping hotspots */}
-        <div className="rounded-[2.5rem] overflow-hidden relative">
+        <div ref={imageWrapRef} className="rounded-[2.5rem] overflow-hidden relative">
           <img src={campaign.imageUrl} alt={campaign.name} className="block" style={{ filter: getFilterString(campaign.filters) }} referrerPolicy="no-referrer" />
 
           {/* Radius Effects */}
@@ -204,11 +348,25 @@ export default function HotspotRenderer() {
 
             return (
               <button key={h.id}
+                type="button"
+                aria-label={h.title ? `Open ${h.title}` : 'Open hotspot'}
+                title={h.title || 'Open'}
                 onClick={(e) => { e.stopPropagation(); handleHotspotInteraction(h, 'click'); }}
                 onMouseEnter={() => isHover && handleHotspotInteraction(h, 'hover')}
                 onMouseLeave={() => isHover && handleHotspotLeave()}
-                className="absolute flex items-center justify-center group transition-transform duration-75 ease-out"
-                style={{ left: `${h.x}px`, top: `${h.y}px`, width: `${size * 2.5}px`, height: `${size * 2.5}px`, transform: 'translate(-50%, -50%)' }}>
+                onFocus={() => setHoveredHotspot(h)}
+                onBlur={() => setHoveredHotspot(null)}
+                className="absolute flex items-center justify-center group transition-transform duration-75 ease-out rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/60"
+                style={{
+                  left: `${h.x}px`,
+                  top: `${h.y}px`,
+                  width: `${Math.max(32, size * 2 + 8)}px`,
+                  height: `${Math.max(32, size * 2 + 8)}px`,
+                  transform: 'translate(-50%, -50%)',
+                  // The dot you are hovering or have open always wins over a
+                  // neighbour it happens to overlap.
+                  zIndex: activeHotspot?.id === h.id ? 30 : hoveredHotspot?.id === h.id ? 20 : 10,
+                }}>
 
                 {/* Animations */}
                 {animType === 'ping' && (
@@ -253,7 +411,7 @@ export default function HotspotRenderer() {
         <AnimatePresence>
           {hoveredHotspot && !activeHotspot && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, x: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? 10 : -10 }}
+              initial={{ opacity: 0, scale: 0.9, x: hoverCardOnRight ? 10 : -10 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
@@ -261,15 +419,13 @@ export default function HotspotRenderer() {
               onMouseLeave={handleHotspotLeave}
               className="absolute z-[99999] pointer-events-auto"
               style={{
-                // Determine if we should show card on left or right of the hotspot
-                left: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2)
-                  ? `${hoveredHotspot.x - 30}px`
-                  : `${hoveredHotspot.x + 30}px`,
+                // Open on the side of the dot that has room inside the image.
+                left: hoverCardOnRight ? `${hoveredHotspot.x - 30}px` : `${hoveredHotspot.x + 30}px`,
                 top: `${hoveredHotspot.y}px`,
-                transformOrigin: (hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? 'right' : 'left',
-                transform: `translate(${(hoveredHotspot.x > (containerRef.current?.offsetWidth || 800) / 2) ? '-100%' : '0'}, -50%)`
+                transformOrigin: hoverCardOnRight ? 'right' : 'left',
+                transform: `translate(${hoverCardOnRight ? '-100%' : '0'}, -50%)`
               }}>
-              <InlineCard hotspot={hoveredHotspot} onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} />
+              <InlineCard hotspot={hoveredHotspot} onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -281,11 +437,52 @@ export default function HotspotRenderer() {
         )}
       </div>
 
+      {/* First-visit hint so visitors know the dots are tappable */}
+      <AnimatePresence>
+        {showHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className="absolute left-1/2 top-6 z-[1000000] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2"
+          >
+            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <MousePointerClick className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-black text-slate-900">Tap the dots to explore</p>
+                <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-slate-500">
+                  Each dot opens a product, video, note or form.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={dismissHint}
+                aria-label="Dismiss hint"
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!campaign.hotspots?.length && (
+        <div className="absolute left-1/2 top-6 z-40 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur">
+          <p className="text-xs font-black text-amber-900">Nothing to explore here yet</p>
+          <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-amber-800">
+            The owner has not added hotspots to this image.
+          </p>
+        </div>
+      )}
+
       {/* Zoom Controls */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-white/50">
-        <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 1))} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><X className="w-4 h-4 rotate-45" /></button>
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-2xl border border-white/50 bg-white/80 p-2 shadow-xl backdrop-blur-md">
+        <button type="button" onClick={() => setZoom(prev => Math.max(prev - 0.2, 1))} aria-label="Zoom out" title="Zoom out" className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><X className="w-4 h-4 rotate-45" /></button>
         <span className="text-[10px] font-black text-slate-400 w-12 text-center uppercase tracking-widest">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 5))} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><Plus className="w-4 h-4" /></button>
+        <button type="button" onClick={() => setZoom(prev => Math.min(prev + 0.2, 5))} aria-label="Zoom in" title="Zoom in" className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><Plus className="w-4 h-4" /></button>
       </div>
 
       {/* Full Modal (Click Trigger) - Fixed at Root for Interactions */}
@@ -293,11 +490,18 @@ export default function HotspotRenderer() {
         {activeHotspot && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-[999999]"
-            onClick={() => { setActiveHotspot(null); setLeadCaptured(false); }}>
-            <motion.div initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-              <ModalContent hotspot={activeHotspot} onClose={() => { setActiveHotspot(null); setLeadCaptured(false); }}
-                onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} />
+            onClick={() => { setActiveHotspot(null); setLeadCaptured(false); setFormError(null); }}>
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={activeHotspot.title || 'Hotspot details'}
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <ModalContent hotspot={activeHotspot} onClose={() => { setActiveHotspot(null); setLeadCaptured(false); setFormError(null); }}
+                onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />
             </motion.div>
           </motion.div>
         )}
@@ -307,7 +511,7 @@ export default function HotspotRenderer() {
 }
 
 /* ─── Inline Hover Card ─── */
-function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Hotspot; onAction: (h: Hotspot) => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; leadCaptured: boolean }) {
+function InlineCard({ hotspot, onAction, onSubmit, leadCaptured, formError, submitting }: { hotspot: Hotspot; onAction: (h: Hotspot) => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; leadCaptured: boolean; formError?: string | null; submitting?: boolean }) {
   if (hotspot.type === 'product') {
     const isServiceFirst = hotspot.offerType === 'service-first';
     const isBundle = hotspot.offerType === 'bundle';
@@ -392,15 +596,21 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Ho
         {leadCaptured ? (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-emerald-50 text-emerald-600 p-5 rounded-2xl flex flex-col items-center text-center gap-2">
             <CheckCircle className="w-8 h-8" />
-            <div className="font-black text-xs uppercase tracking-widest">Success!</div>
+            <div className="font-black text-xs uppercase tracking-widest">You're on the list</div>
+            <p className="text-[11px] font-medium text-emerald-700">Thanks — check your inbox soon.</p>
           </motion.div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-3">
             {(hotspot.formFields || [{ id: '1', type: 'text', label: 'Name', placeholder: 'Your name', required: true }, { id: '2', type: 'email', label: 'Email', placeholder: 'your@email.com', required: true }]).map((field: FormField) => (
               <DynamicField key={field.id} field={field} />
             ))}
-            <button type="submit" className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-200/50 hover:shadow-xl transition-all active:scale-[0.98]">
-              {hotspot.ctaText || 'Submit'}
+            {formError && (
+              <p role="alert" className="flex items-start gap-1.5 rounded-xl border border-red-100 bg-red-50 p-2.5 text-[11px] font-bold leading-snug text-red-700">
+                <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" /> {formError}
+              </p>
+            )}
+            <button type="submit" disabled={submitting} className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-200/50 hover:shadow-xl transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
+              {submitting ? 'Sending…' : hotspot.ctaText || 'Submit'}
             </button>
           </form>
         )}
@@ -445,7 +655,7 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured }: { hotspot: Ho
 }
 
 /* ─── Full Modal Content ─── */
-function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: any) {
+function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured, formError, submitting }: any) {
   if (hotspot.type === 'product') {
     const isServiceFirst = hotspot.offerType === 'service-first';
     const isBundle = hotspot.offerType === 'bundle';
@@ -456,7 +666,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
           <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
             <ProductImageGallery images={[hotspot.imageUrl || '', ...(hotspot.additionalImages || [])].filter(Boolean)} />
           </div>
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm z-10"><X className="w-4 h-4 text-slate-500" /></button>
+          <button onClick={onClose} aria-label="Close details" className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm z-10"><X className="w-4 h-4 text-slate-500" /></button>
           <button className="absolute top-4 left-4 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm text-slate-400 hover:text-red-500 transition-colors z-10"><Heart className="w-4 h-4" /></button>
           {isBundle && (
             <div className="absolute bottom-4 left-4 px-4 py-2 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg z-10">
@@ -502,7 +712,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
     return (
       <>
         <div className="relative">
-          <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm"><X className="w-4 h-4 text-slate-500" /></button>
+          <button onClick={onClose} aria-label="Close video" className="absolute top-4 right-4 z-10 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm"><X className="w-4 h-4 text-slate-500" /></button>
           <div className="aspect-video bg-slate-900 overflow-hidden rounded-t-[2rem]">
             {hotspot.videoUrl ? <video src={hotspot.videoUrl} className="w-full h-full object-cover" controls autoPlay /> :
               <div className="w-full h-full flex items-center justify-center"><Play className="w-16 h-16 text-white/20" /></div>}
@@ -528,7 +738,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
         <div className="p-3 rounded-2xl" style={{ backgroundColor: `${hotspot.backgroundColor || '#2563eb'}15`, color: hotspot.backgroundColor || '#2563eb' }}>
           <ModalIcon type={hotspot.type} />
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
+        <button onClick={onClose} aria-label="Close details" className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
       </div>
       <h3 className="text-2xl font-black text-slate-900 mb-2">{hotspot.title}</h3>
       {hotspot.description && <p className="text-slate-500 font-medium mb-8 leading-relaxed">{hotspot.description}</p>}
@@ -536,15 +746,20 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
       {hotspot.type === 'signup_form' || hotspot.type === 'email_signup_image' ? (
         leadCaptured ? (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-emerald-50 text-emerald-600 p-6 rounded-2xl flex flex-col items-center text-center gap-3">
-            <CheckCircle className="w-10 h-10" /><div className="font-black uppercase tracking-widest text-xs">Success!</div><p className="font-bold">You're on the list.</p>
+            <CheckCircle className="w-10 h-10" /><div className="font-black uppercase tracking-widest text-xs">You're on the list</div><p className="font-bold">Thanks — check your inbox soon.</p>
           </motion.div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-4">
             {(hotspot.formFields || [{ id: '1', type: 'text', label: 'Name', placeholder: 'Your name', required: true }, { id: '2', type: 'email', label: 'Email', placeholder: 'your@email.com', required: true }]).map((field: FormField) => (
               <DynamicField key={field.id} field={field} />
             ))}
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
-              {hotspot.ctaText || 'Subscribe Now'} <ArrowRight className="w-4 h-4" />
+            {formError && (
+              <p role="alert" className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-xs font-bold leading-snug text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {formError}
+              </p>
+            )}
+            <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
+              {submitting ? 'Sending…' : hotspot.ctaText || 'Subscribe now'} <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         )
@@ -562,18 +777,24 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured }: an
 /* ─── Dynamic Form Field ─── */
 function DynamicField({ field }: { field: FormField }) {
   const baseClass = "w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-sm";
+  const label = field.label || 'Field';
+  const autoComplete =
+    field.type === 'email' ? 'email' :
+      field.type === 'tel' ? 'tel' :
+        /name/i.test(label) ? 'name' : undefined;
+
   if (field.type === 'textarea') {
-    return <textarea name={field.label} required={field.required} placeholder={field.placeholder || field.label} className={`${baseClass} h-24 resize-none`} />;
+    return <textarea name={field.label} aria-label={label} required={field.required} placeholder={field.placeholder || field.label} className={`${baseClass} h-24 resize-none`} />;
   }
   if (field.type === 'select') {
     return (
-      <select name={field.label} required={field.required} className={baseClass}>
+      <select name={field.label} aria-label={label} required={field.required} className={baseClass} defaultValue="">
         <option value="">{field.placeholder || `Select ${field.label}`}</option>
         {(field.options || []).map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
       </select>
     );
   }
-  return <input type={field.type} name={field.label} required={field.required} placeholder={field.placeholder || field.label} className={baseClass} />;
+  return <input type={field.type} name={field.label} aria-label={label} autoComplete={autoComplete} required={field.required} placeholder={field.placeholder || field.label} className={baseClass} />;
 }
 
 /* ─── Product Image Gallery ─── */
@@ -615,12 +836,14 @@ function ProductImageGallery({ images }: { images: string[] }) {
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); setCurrentIdx(prev => (prev - 1 + images.length) % images.length); }}
+            aria-label="Previous image"
             className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setCurrentIdx(prev => (prev + 1) % images.length); }}
+            aria-label="Next image"
             className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <ChevronRight className="w-4 h-4" />

@@ -4,7 +4,7 @@ export declare class CampaignsService {
     constructor(prisma: PrismaService);
     create(userId: number, data: any): Promise<any>;
     findAll(userId: number): Promise<any[]>;
-    findOne(id: number): Promise<any>;
+    findOne(id: number, userId?: number): Promise<any>;
     update(id: number, userId: number, data: any): Promise<any>;
     remove(id: number, userId: number): Promise<{
         id: number;
@@ -13,8 +13,8 @@ export declare class CampaignsService {
         updatedAt: Date;
         imageUrl: string;
         filters: import("@prisma/client/runtime/library").JsonValue | null;
-        userId: number;
         watermarkUrl: string | null;
         soundUrl: string | null;
+        userId: number;
     }>;
 }

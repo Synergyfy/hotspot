@@ -1,38 +1,51 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** Convert a frontend hotspot object → Prisma-compatible row */
+/**
+ * Convert a frontend hotspot object → Prisma-compatible row.
+ *
+ * Only real database columns are returned. Everything the editor owns
+ * (colours, animations, form fields, product info, media, sizes...) is
+ * packed into the `config` JSON column so Prisma never sees unknown keys.
+ */
 function toDbHotspot(h: any) {
-  const {
-    // Strip DB-generated / relational fields that must NOT be passed on create
-    id, campaignId, createdAt, updatedAt,
-    // Strip nested action object → flatten below
-    action,
-    // Strip all UI-only fields → pack into config JSON
-    currency, triggerType, iconName, iconColor, backgroundColor,
-    pulseAnimation, roundness, formFields, redirectUrl,
-    width, height, imageUrl, videoUrl, price, ctaText,
-    description, radius, filters,
-    // What remains: x, y, type, title — valid DB columns
-    ...rest
-  } = h;
-
-  // Remove undefined values from config so JSON stays clean
   const config: Record<string, any> = {};
-  const configSource = {
-    currency, triggerType, iconName, iconColor, backgroundColor,
-    pulseAnimation, roundness, formFields, redirectUrl,
-    imageUrl, videoUrl, price, ctaText, description, radius,
-    width, height, filters,
+  const configSource: Record<string, any> = {
+    currency: h.currency,
+    triggerType: h.triggerType,
+    iconName: h.iconName,
+    iconColor: h.iconColor,
+    backgroundColor: h.backgroundColor,
+    animationType: h.animationType,
+    pulseAnimation: h.pulseAnimation,
+    roundness: h.roundness,
+    formFields: h.formFields,
+    redirectUrl: h.redirectUrl,
+    width: h.width,
+    height: h.height,
+    imageUrl: h.imageUrl,
+    videoUrl: h.videoUrl,
+    price: h.price,
+    ctaText: h.ctaText,
+    description: h.description,
+    radius: h.radius,
+    filters: h.filters,
+    productInfo: h.productInfo,
+    additionalImages: h.additionalImages,
+    offerType: h.offerType,
   };
-  for (const [k, v] of Object.entries(configSource)) {
-    if (v !== undefined) config[k] = v;
+
+  for (const [key, value] of Object.entries(configSource)) {
+    if (value !== undefined) config[key] = value;
   }
 
   return {
-    ...rest,
-    actionType: action?.type ?? 'url',
-    actionValue: action?.value ?? '',
+    x: Number(h.x) || 0,
+    y: Number(h.y) || 0,
+    type: h.type || 'standard',
+    title: h.title || 'Hotspot',
+    actionType: h.action?.type ?? 'url',
+    actionValue: h.action?.value ?? '',
     config,
   };
 }
@@ -83,11 +96,15 @@ export class CampaignsService {
     return campaigns.map(toFrontendCampaign);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, userId?: number) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id },
       include: { hotspots: true },
     });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (userId !== undefined && campaign.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this campaign');
+    }
     return toFrontendCampaign(campaign);
   }
 
@@ -111,7 +128,7 @@ export class CampaignsService {
     // Update each existing hotspot in-place
     await Promise.all(
       existingHotspots.map((h: any) => {
-        const { id: hotspotId, ...hotspotData } = toDbHotspot({ ...h, id: h.id });
+        const hotspotData = toDbHotspot(h);
         return this.prisma.hotspot.update({
           where: { id: h.id },
           data: hotspotData,

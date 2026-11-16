@@ -20,7 +20,7 @@ export interface FormField {
 }
 
 export interface Hotspot {
-  id: string;
+  id: string | number;
   type: HotspotType;
   x: number;
   y: number;
@@ -66,7 +66,7 @@ export interface Hotspot {
 }
 
 export interface Campaign {
-  id: string;
+  id: string | number;
   name: string;
   imageUrl: string;
   userId: string;
@@ -102,7 +102,7 @@ export interface Lead {
   campaignId: string | number;
   name: string;
   email: string;
-  createdAt: string;
+  createdAt?: string;
   timestamp?: string; // For legacy/local data support
   data?: Record<string, string>;
 }

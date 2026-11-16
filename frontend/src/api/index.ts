@@ -17,17 +17,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor to handle errors
+// Response interceptor to handle expired sessions
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl: string = error.config?.url || '';
+    const isAuthAttempt = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+    const alreadyOnLogin = window.location.pathname.startsWith('/login');
+
+    // A failed sign-in must stay on the page so the error message is visible.
+    if (error.response?.status === 401 && !isAuthAttempt && !alreadyOnLogin) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
