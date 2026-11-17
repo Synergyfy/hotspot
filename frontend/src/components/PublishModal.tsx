@@ -102,7 +102,7 @@ export function PublishModal({
             exit={{ opacity: 0, scale: 0.96, y: 16 }}
             className="relative my-8 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl"
           >
-            <div className="flex items-start justify-between border-b border-slate-100 p-7">
+            <div className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-7">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
                   <Share2 className="h-6 w-6" />
@@ -124,7 +124,7 @@ export function PublishModal({
               </button>
             </div>
 
-            <div className="p-7">
+            <div className="p-5 sm:p-7">
               <StepIndicator
                 steps={[
                   { label: 'Save campaign', done: true },

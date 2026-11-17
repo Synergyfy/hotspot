@@ -87,13 +87,13 @@ export function OnboardingChecklist({ campaigns, onNewCampaign, onHelp }: Props)
 
   if (allDone) {
     return (
-      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-emerald-200 bg-emerald-50/70 p-6 sm:flex-row sm:items-center">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
-          <PartyPopper className="h-6 w-6" />
+      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:mb-8 sm:flex-row sm:items-center sm:gap-4 sm:rounded-3xl sm:p-6">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-200 sm:h-12 sm:w-12">
+          <PartyPopper className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
         <div className="flex-1">
-          <h2 className="text-lg font-black text-emerald-900">You’re live — nice work.</h2>
-          <p className="mt-0.5 text-sm font-medium text-emerald-700">
+          <h2 className="text-base font-black text-emerald-900 sm:text-lg">You’re live — nice work.</h2>
+          <p className="mt-0.5 text-[11px] font-medium leading-snug text-emerald-700 sm:text-sm">
             Your campaign is published. Check Analytics after a little traffic to see views, clicks and leads.
           </p>
         </div>
@@ -101,7 +101,7 @@ export function OnboardingChecklist({ campaigns, onNewCampaign, onHelp }: Props)
           <button
             type="button"
             onClick={preview}
-            className="rounded-xl border border-emerald-200 bg-white px-4 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100"
+            className="rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-black text-emerald-700 transition-colors hover:bg-emerald-100 sm:px-4 sm:py-2 sm:text-xs"
           >
             View campaign
           </button>
@@ -114,15 +114,15 @@ export function OnboardingChecklist({ campaigns, onNewCampaign, onHelp }: Props)
   }
 
   return (
-    <div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-            <Rocket className="h-5 w-5" />
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:mb-8 sm:rounded-3xl">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-3 sm:gap-4 sm:p-6">
+        <div className="flex items-start gap-2.5 sm:gap-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200 sm:h-11 sm:w-11 sm:rounded-2xl">
+            <Rocket className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-slate-900">Get your first campaign live</h2>
-            <p className="mt-0.5 text-sm font-medium text-slate-500">Four short steps. This card disappears when you’re done.</p>
+            <h2 className="text-[13px] font-black leading-tight text-slate-900 sm:text-lg">Get your first campaign live</h2>
+            <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-500 sm:text-sm">Four short steps. This card disappears when you’re done.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -146,38 +146,38 @@ export function OnboardingChecklist({ campaigns, onNewCampaign, onHelp }: Props)
 
       <ul className="divide-y divide-slate-100">
         {steps.map((step) => (
-          <li key={step.label} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
+          <li key={step.label} className="flex flex-wrap items-start gap-2.5 p-3 sm:flex-nowrap sm:items-center sm:gap-3 sm:p-5">
             <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 sm:h-8 sm:w-8 ${
                 step.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-200 bg-white text-slate-300'
               }`}
             >
-              {step.done ? <Check className="h-4 w-4" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+              {step.done ? <Check className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className={`text-sm font-bold ${step.done ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-900'}`}>
+              <p className={`text-[13px] font-bold leading-tight ${step.done ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-900'}`}>
                 {step.label}
               </p>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">{step.hint}</p>
+              <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-500">{step.hint}</p>
             </div>
             {!step.done && (
               <button
                 type="button"
                 onClick={step.action.onClick}
-                className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:self-auto"
+                className="inline-flex shrink-0 items-center justify-center gap-1 self-start rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:gap-1.5 sm:self-auto sm:rounded-xl sm:px-3.5 sm:py-2 sm:text-xs"
               >
-                {step.action.label} <step.action.icon className="h-3.5 w-3.5" />
+                {step.action.label} <step.action.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </button>
             )}
-            {step.done && <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" aria-hidden="true" />}
+            {step.done && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 sm:h-5 sm:w-5" aria-hidden="true" />}
           </li>
         ))}
       </ul>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4">
-        <Share2 className="h-4 w-4 text-slate-400" />
-        <p className="text-xs font-medium text-slate-500">Not sure where to start?</p>
-        <button type="button" onClick={onHelp} className="text-xs font-black text-blue-600 hover:text-blue-700">
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+        <Share2 className="h-3.5 w-3.5 text-slate-400" />
+        <p className="text-[11px] font-medium text-slate-500 sm:text-xs">Not sure where to start?</p>
+        <button type="button" onClick={onHelp} className="text-[11px] font-black text-blue-600 hover:text-blue-700 sm:text-xs">
           Read the 2-minute guide
         </button>
       </div>

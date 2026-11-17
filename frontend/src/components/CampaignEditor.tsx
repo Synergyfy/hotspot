@@ -104,7 +104,8 @@ export default function CampaignEditor() {
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [hoveredId, setHoveredId] = useState<string | number | null>(null);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
-  const [scale, setScale] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [image] = useImage(campaign?.imageUrl || '', 'anonymous');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -113,10 +114,12 @@ export default function CampaignEditor() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [hotspotToDelete, setHotspotToDelete] = useState<Hotspot | null>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const stageRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -145,6 +148,32 @@ export default function CampaignEditor() {
   }, [id, navigate]);
 
   useEffect(() => { if (imageRef.current) imageRef.current.cache(); }, [image, filters]);
+
+  // Fit the artwork inside the canvas on phones and laptops instead of
+  // overflowing it, and keep the fit up to date on rotation / resize.
+  useEffect(() => {
+    if (loading) return;
+    const el = canvasRef.current;
+    if (!el) return;
+    const update = () => setCanvasSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, campaign?.id]);
+
+  const fitScale = useMemo(() => {
+    if (!image || !canvasSize.width || !canvasSize.height) return 1;
+    const padding = canvasSize.width < 640 ? 32 : 96;
+    return Math.max(0.05, Math.min(1, (canvasSize.width - padding) / image.width, (canvasSize.height - padding) / image.height));
+  }, [image, canvasSize]);
+
+  const displayScale = fitScale * zoom;
+
+  useEffect(() => {
+    setStagePos({ x: 0, y: 0 });
+  }, [image, canvasSize.width, canvasSize.height]);
 
   // Escape leaves "click the image to place a hotspot" mode.
   useEffect(() => {
@@ -198,8 +227,8 @@ export default function CampaignEditor() {
     // Plain background clicks now deselect, so brushing past a dot can never
     // spawn a second hotspot on top of it.
     if (hotspots.length === 0 || isAdding) {
-      const relativeX = (pos.x - stage.x()) / stage.scaleX();
-      const relativeY = (pos.y - stage.y()) / stage.scaleY();
+      const relativeX = (pos.x - stage.x()) / displayScale;
+      const relativeY = (pos.y - stage.y()) / displayScale;
       addHotspot(relativeX, relativeY);
     } else {
       setSelectedId(null);
@@ -391,21 +420,21 @@ export default function CampaignEditor() {
   const activePreviewHotspot = hotspots.find(h => h.id === (hoveredId || selectedId));
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 font-sans">
+    <div className="flex min-h-screen flex-col bg-slate-50 font-sans lg:h-screen">
       {/* Header */}
-      <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between gap-4 z-20 shadow-sm">
-        <div className="flex items-center gap-4 min-w-0">
+      <header className="z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 shadow-sm sm:h-20 sm:gap-4 sm:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             onClick={leaveEditor}
             title="Back to campaigns"
             aria-label="Back to campaigns"
-            className="w-10 h-10 shrink-0 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-all"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100"
           >
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg sm:text-xl font-black text-slate-900">{campaign?.name || 'Campaign'}</h1>
-            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
+            <h1 className="truncate text-base font-black text-slate-900 sm:text-xl">{campaign?.name || 'Campaign'}</h1>
+            <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest sm:text-[10px]">
               {saving ? (
                 <><Loader2 className="h-3 w-3 animate-spin text-blue-500" /><span className="text-blue-600">Saving…</span></>
               ) : isDirty ? (
@@ -417,12 +446,13 @@ export default function CampaignEditor() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <button
             onClick={() => (isDirty ? saveCampaign() : toast.info('Already saved', 'There are no unsaved changes right now.'))}
             disabled={saving}
             title={isDirty ? 'Save your draft' : 'Everything is already saved'}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Save draft"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 text-xs font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:text-sm"
           >
             <Save className="w-4 h-4" /> <span className="hidden sm:inline">{isDirty ? 'Save draft' : 'Saved'}</span>
           </button>
@@ -430,7 +460,8 @@ export default function CampaignEditor() {
             onClick={handleSaveAndPreview}
             disabled={saving}
             title="Saves, then opens what your visitors will see"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-50"
+            aria-label="Preview"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 text-xs font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-50 sm:px-5 sm:text-sm"
           >
             <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Preview</span>
           </button>
@@ -438,7 +469,7 @@ export default function CampaignEditor() {
             onClick={handlePublish}
             disabled={saving}
             title="Get the link or embed code to share"
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 sm:px-6 sm:text-sm"
           >
             <Share2 className="w-4 h-4" /> <span className="hidden sm:inline">Publish &amp; share</span><span className="sm:hidden">Share</span>
           </button>
@@ -446,7 +477,7 @@ export default function CampaignEditor() {
       </header>
 
       {/* Step strip: always tells the user where they are in the flow */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-4 py-2.5 sm:px-8 z-10">
+      <div className="z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/80 px-3 py-2 sm:gap-3 sm:px-8 sm:py-2.5">
         <StepIndicator
           steps={[
             { label: 'Image', done: Boolean(campaign?.imageUrl) },
@@ -454,7 +485,7 @@ export default function CampaignEditor() {
             { label: 'Publish', active: hotspots.length > 0 },
           ]}
         />
-        <p className="text-[11px] font-medium text-slate-400">
+        <p className="hidden text-[11px] font-medium text-slate-400 md:block">
           {isAdding
             ? 'Add mode: click anywhere on the image to place hotspots — keep clicking to add more. Esc or Cancel to stop.'
             : hotspots.length === 0
@@ -463,11 +494,11 @@ export default function CampaignEditor() {
         </p>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-24 bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-5 z-10">
+        <aside className="order-2 flex w-full shrink-0 flex-row items-center gap-1.5 overflow-x-auto border-t border-slate-200 bg-white px-2 py-2 lg:order-none lg:w-24 lg:flex-col lg:gap-5 lg:overflow-visible lg:border-r lg:border-t-0 lg:py-8">
           <ToolButton icon={MousePointer2} active label="Select" desc="Click dots to edit" />
-          <div className="w-10 h-px bg-slate-100"></div>
+          <div className="hidden w-10 h-px shrink-0 bg-slate-100 lg:block"></div>
           <ToolButton icon={Plus} onClick={startAdding} label="Add hotspot" desc="Click image to place dots" />
           <ToolButton
             icon={Sparkles}
@@ -481,24 +512,24 @@ export default function CampaignEditor() {
         </aside>
 
         {/* Main Canvas */}
-        <main className={`flex-1 relative bg-slate-100 overflow-hidden flex items-center justify-center p-24 mt-8 ${isAdding ? 'cursor-crosshair' : ''}`}>
+        <main ref={canvasRef} className={`relative order-1 flex h-[46vh] min-h-[280px] shrink-0 items-center justify-center overflow-hidden bg-slate-100 p-4 sm:p-10 lg:order-none lg:h-auto lg:flex-1 lg:p-24 ${isAdding ? 'cursor-crosshair' : ''}`}>
           {isAdding && (
-            <div className="absolute left-1/2 top-8 z-30 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl">
+            <div className="absolute left-1/2 top-4 z-30 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl sm:top-8">
               <MousePointerClick className="h-4 w-4 shrink-0 text-blue-300" />
-              <p className="text-xs font-bold">Add mode — click objects on the image to place hotspots. Keep clicking to add more.</p>
+              <p className="text-xs font-bold">Add mode — tap objects on the image to place hotspots. Keep tapping to add more.</p>
               <button
                 type="button"
                 onClick={() => setIsAdding(false)}
-                className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/20"
+                className="ml-auto shrink-0 rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/20"
               >
-                Cancel · Esc
+                Cancel
               </button>
             </div>
           )}
-          <div className="absolute top-8 right-8 flex flex-col gap-2 z-20">
-            <button onClick={() => setScale(s => s * 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Plus className="w-5 h-5" /></button>
-            <button onClick={() => setScale(s => s / 1.2)} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600"><Minus className="w-5 h-5" /></button>
-            <button onClick={() => { setScale(1); if (stageRef.current) stageRef.current.position({ x: 0, y: 0 }); }} className="p-3 bg-white rounded-xl shadow-lg hover:bg-slate-50 text-slate-600 text-[10px] font-black">100%</button>
+          <div className="absolute bottom-3 right-3 z-20 flex flex-row gap-1.5 sm:top-8 sm:bottom-auto sm:right-8 sm:flex-col sm:gap-2">
+            <button onClick={() => setZoom((z) => Math.min(4, z * 1.2))} aria-label="Zoom in" className="rounded-xl bg-white p-2.5 text-slate-600 shadow-lg hover:bg-slate-50"><Plus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            <button onClick={() => setZoom((z) => Math.max(0.5, z / 1.2))} aria-label="Zoom out" className="rounded-xl bg-white p-2.5 text-slate-600 shadow-lg hover:bg-slate-50"><Minus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            <button onClick={() => { setZoom(1); setStagePos({ x: 0, y: 0 }); }} aria-label="Reset zoom" className="rounded-xl bg-white px-2 py-2.5 text-[10px] font-black text-slate-600 shadow-lg hover:bg-slate-50">{Math.round(displayScale * 100)}%</button>
           </div>
 
           <div className="relative shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] bg-white">
@@ -533,10 +564,9 @@ export default function CampaignEditor() {
             {image && (
               <div className="relative">
                 {/* Image Wrapper for Konva Stage */}
-                <div className="rounded-3xl overflow-hidden relative">
-                  <Stage width={image.width} height={image.height}
+                <div className="rounded-2xl overflow-hidden relative sm:rounded-3xl">
+                  <Stage width={image.width * displayScale} height={image.height * displayScale}
                     onClick={handleStageClick}
-                    scaleX={scale} scaleY={scale}
                     ref={stageRef}
                     draggable
                     x={stagePos.x}
@@ -544,7 +574,7 @@ export default function CampaignEditor() {
                     onDragEnd={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
                     onDragMove={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
                   >
-                    <Layer>
+                    <Layer scaleX={displayScale} scaleY={displayScale}>
                       <KonvaImage image={image} ref={imageRef} filters={konvaFilters} {...filters} name="background-image" />
                     </Layer>
                   </Stage>
@@ -558,7 +588,7 @@ export default function CampaignEditor() {
                       hotspot={h}
                       isSelected={h.id === selectedId}
                       isHovered={h.id === hoveredId}
-                      scale={scale}
+                      scale={displayScale}
                       stagePos={stagePos}
                       imageWidth={image.width}
                       imageHeight={image.height}
@@ -582,9 +612,9 @@ export default function CampaignEditor() {
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                       style={{
-                        left: `${(activePreviewHotspot.x * scale) + stagePos.x + (activePreviewHotspot.x * scale > (image.width * scale) / 2 ? -20 : 20)}px`,
-                        top: `${(activePreviewHotspot.y * scale) + stagePos.y}px`,
-                        transform: `translate(${(activePreviewHotspot.x * scale > (image.width * scale) / 2) ? '-100%' : '0'}, -50%)`
+                        left: `${(activePreviewHotspot.x * displayScale) + stagePos.x + (activePreviewHotspot.x * displayScale > (image.width * displayScale) / 2 ? -20 : 20)}px`,
+                        top: `${(activePreviewHotspot.y * displayScale) + stagePos.y}px`,
+                        transform: `translate(${(activePreviewHotspot.x * displayScale > (image.width * displayScale) / 2) ? '-100%' : '0'}, -50%)`
                       }}
                     >
                       <LivePreviewCard hotspot={activePreviewHotspot} />
@@ -597,7 +627,7 @@ export default function CampaignEditor() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className="w-96 bg-white border-l border-slate-200 flex flex-col z-10">
+        <aside className="order-3 flex w-full shrink-0 flex-col border-t border-slate-200 bg-white lg:w-96 lg:border-l lg:border-t-0">
           <div className="flex border-b border-slate-100">
             {[
               { id: 'properties', label: 'Hotspot', desc: 'Edit the selected dot' },
@@ -605,14 +635,14 @@ export default function CampaignEditor() {
               { id: 'settings', label: 'Settings', desc: 'Sound, watermark & more' },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-1 py-4 text-center transition-all ${activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-slate-400 hover:text-slate-600'}`}>
-                <span className="block text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+                className={`flex-1 px-1 py-3 text-center transition-all sm:py-4 ${activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-slate-400 hover:text-slate-600'}`}>
+                <span className="block text-[9px] font-black uppercase tracking-widest sm:text-[10px]">{tab.label}</span>
                 <span className={`mt-0.5 block text-[8px] font-medium leading-tight ${activeTab === tab.id ? 'text-blue-400' : 'text-slate-300'}`}>{tab.desc}</span>
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-8">
             {/* Contextual guidance: tells the user what this panel is for */}
             <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
@@ -1151,7 +1181,9 @@ function EditorHotspotMarker({ hotspot, isSelected, isHovered, scale, stagePos, 
 
   // Keep the invisible tap target honest: big enough to grab, small enough that
   // two neighbouring dots do not fight over the same pixels.
-  const hitSize = Math.max(32, size * 2 * scale + 12);
+  const displaySize = Math.max(22, size * 2 * scale);
+  const iconSize = Math.max(10, size * scale);
+  const hitSize = Math.max(40, displaySize + 16);
 
   const clamp = (x: number, y: number) => ({
     x: imageWidth ? Math.min(Math.max(x, 16), imageWidth - 16) : x,
@@ -1248,7 +1280,7 @@ function EditorHotspotMarker({ hotspot, isSelected, isHovered, scale, stagePos, 
       {/* Visual Animation Rings */}
       {animType === 'ping' && (
         <div className="absolute inset-0 animate-ping opacity-30"
-          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25 * scale}px` }} />
+          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${Math.max(4, cornerRadius * 1.25 * scale)}px` }} />
       )}
 
       {animType === 'pulse' && (
@@ -1256,18 +1288,18 @@ function EditorHotspotMarker({ hotspot, isSelected, isHovered, scale, stagePos, 
           animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
           transition={{ repeat: Infinity, duration: 2 }}
           className="absolute inset-0"
-          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25 * scale}px` }} />
+          style={{ backgroundColor: hotspot.backgroundColor || '#2563eb', borderRadius: `${Math.max(4, cornerRadius * 1.25 * scale)}px` }} />
       )}
 
       {/* Main Marker Body */}
       <motion.div
         className={`relative flex items-center justify-center shadow-lg border-2 ${isSelected ? 'border-red-500 scale-110' : 'border-white'}`}
         style={{
-          width: `${size * 2 * scale}px`,
-          height: `${size * 2 * scale}px`,
+          width: `${displaySize}px`,
+          height: `${displaySize}px`,
           backgroundColor: hotspot.backgroundColor || '#2563eb',
           color: hotspot.iconColor || '#ffffff',
-          borderRadius: `${cornerRadius * scale}px`
+          borderRadius: `${Math.max(4, cornerRadius * scale)}px`
         }}
         animate={
           animType === 'bounce' ? { y: [0, -10, 0] } :
@@ -1279,9 +1311,9 @@ function EditorHotspotMarker({ hotspot, isSelected, isHovered, scale, stagePos, 
         }
       >
         {HotspotIcon ? (
-          <HotspotIcon style={{ width: `${size * scale}px`, height: `${size * scale}px` }} />
+          <HotspotIcon style={{ width: `${iconSize}px`, height: `${iconSize}px` }} />
         ) : (
-          <div className="font-black" style={{ fontSize: `${size * 0.8 * scale}px` }}>
+          <div className="font-black" style={{ fontSize: `${Math.max(9, size * 0.8 * scale)}px` }}>
             {hotspot.type === 'product' ? <ShoppingCart className="w-full h-full" /> : <Info className="w-full h-full" />}
           </div>
         )}
@@ -1375,11 +1407,11 @@ function FilterPanel({ filters, setFilters }: any) {
 /* ─── UI Primitives ─── */
 function ToolButton({ icon: Icon, active, onClick, label, desc, className }: any) {
   return (
-    <button onClick={onClick} className={`relative group flex flex-col items-center gap-1 px-1 py-2 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'} ${className}`}>
-      <Icon className="w-6 h-6" />
+    <button onClick={onClick} className={`group relative flex shrink-0 flex-col items-center gap-1 rounded-2xl px-2 py-2 transition-all lg:w-full lg:px-1 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'} ${className}`}>
+      <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
       <span className={`text-[8px] font-black uppercase tracking-wide leading-tight text-center ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>{label}</span>
-      {desc && <span className={`text-[7px] font-medium leading-tight text-center ${active ? 'text-blue-100' : 'text-slate-300 group-hover:text-slate-400'}`}>{desc}</span>}
-      <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">{desc ? `${label} — ${desc}` : label}</div>
+      {desc && <span className={`hidden text-[7px] font-medium leading-tight text-center lg:block ${active ? 'text-blue-100' : 'text-slate-300 group-hover:text-slate-400'}`}>{desc}</span>}
+      <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-4 hidden -translate-y-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 lg:block">{desc ? `${label} — ${desc}` : label}</div>
     </button>
   );
 }

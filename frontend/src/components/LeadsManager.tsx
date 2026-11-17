@@ -141,7 +141,7 @@ export default function LeadsManager() {
             onClick={exportLeads}
             disabled={filteredLeads.length === 0}
             title={filteredLeads.length === 0 ? 'Leads appear here after a form submission' : 'Download the filtered leads as a CSV'}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            className="ml-auto flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             <Download className="h-4 w-4" /> Export CSV
           </button>
@@ -202,7 +202,62 @@ export default function LeadsManager() {
 
         {hasAnyLeads ? (
           <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
-            <div className="overflow-x-auto">
+            {/* Phones: stacked cards instead of a sideways-scrolling table */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {filteredLeads.map((lead) => {
+                const date = formatDate(lead);
+                return (
+                  <div
+                    key={lead.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedLead(lead)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedLead(lead);
+                      }
+                    }}
+                    className="flex cursor-pointer items-start gap-3 p-4 text-left transition-colors active:bg-slate-50"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-bold text-blue-600">
+                      {(lead.name || lead.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-slate-900">{lead.name || 'Anonymous'}</p>
+                          <p className="truncate text-xs font-medium text-slate-400">{lead.email || 'No email provided'}</p>
+                        </div>
+                        <span className="shrink-0 pt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          {date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                        </span>
+                      </div>
+                      <span className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                        <Tag className="h-3 w-3 shrink-0 text-slate-500" />
+                        <span className="truncate">{getCampaignName(lead.campaignId)}</span>
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLeadToDelete(lead);
+                        }}
+                        aria-label={`Delete lead from ${lead.email}`}
+                        className="rounded-xl p-2 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[640px] text-left">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">

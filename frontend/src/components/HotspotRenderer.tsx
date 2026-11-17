@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, Hotspot, AnalyticsEvent, Lead, Domain, FormField } from '../types';
-import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe, ChevronLeft, ChevronRight, Loader2, RefreshCw, Home, AlertCircle, MousePointerClick } from 'lucide-react';
+import { ShoppingCart, Play, Mail, X, ExternalLink, Phone, Info, CheckCircle, ArrowRight, Type, Image as ImageIcon, FileText, MousePointer2, Plus, Minus, ShieldAlert, Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award, ThumbsUp, Clock, Flame, Video, Hash, Globe, ChevronLeft, ChevronRight, Loader2, RefreshCw, Home, AlertCircle, MousePointerClick } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { publicApi, analyticsApi, leadsApi, domainsApi } from '../api/services';
 import { getErrorMessage } from '../lib/errors';
@@ -31,6 +31,8 @@ export default function HotspotRenderer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageWrapRef = useRef<HTMLDivElement>(null);
   const [imageBoxWidth, setImageBoxWidth] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -118,6 +120,32 @@ export default function HotspotRenderer() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [campaign?.imageUrl]);
+
+  // Size the artwork to the viewport so phones see the whole scene instead of
+  // the middle of a wide image. Hotspot positions are multiplied by the same
+  // scale so they stay pinned to the right spots.
+  useEffect(() => {
+    setNaturalSize(null);
+  }, [campaign?.imageUrl]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setViewport({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [campaign?.imageUrl]);
+
+  const fitScale = naturalSize && viewport.width > 0 && viewport.height > 0
+    ? Math.min(
+        1,
+        Math.max(0.05, (viewport.width - (viewport.width < 640 ? 24 : 96)) / naturalSize.width),
+        Math.max(0.05, (viewport.height - (viewport.width < 640 ? 120 : 96)) / naturalSize.height),
+      )
+    : 1;
 
   const trackEvent = async (campaignId: string | number, type: 'view' | 'click' | 'cta', hotspotId?: string | number, domainName?: string) => {
     let fallbackDomain = window.location.hostname;
@@ -304,7 +332,7 @@ export default function HotspotRenderer() {
     return `brightness(${1 + (filters.brightness || 0)}) contrast(${100 + (filters.contrast || 0)}%) blur(${filters.blur || 0}px) hue-rotate(${filters.hue || 0}deg) saturate(${1 + (filters.saturation || 0)}) opacity(${filters.opacity ?? 1}) ${filters.grayscale ? 'grayscale(100%)' : ''} ${filters.sepia ? 'sepia(100%)' : ''} ${filters.invert ? 'invert(100%)' : ''}`.replace(/\s+/g, ' ').trim();
   };
 
-  const hoverCardOnRight = !!hoveredHotspot && imageBoxWidth > 0 && hoveredHotspot.x > imageBoxWidth / 2;
+  const hoverCardOnRight = !!hoveredHotspot && imageBoxWidth > 0 && hoveredHotspot.x * fitScale > imageBoxWidth / 2;
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden flex items-center justify-center font-sans cursor-default select-none"
@@ -317,17 +345,39 @@ export default function HotspotRenderer() {
         style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}>
 
         {/* Wrapper for image and built-in filters to keep rounded corners without clipping hotspots */}
-        <div ref={imageWrapRef} className="rounded-[2.5rem] overflow-hidden relative">
-          <img src={campaign.imageUrl} alt={campaign.name} className="block" style={{ filter: getFilterString(campaign.filters) }} referrerPolicy="no-referrer" />
+        <div
+          ref={imageWrapRef}
+          className="rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden relative bg-slate-100/40"
+          style={naturalSize ? { width: naturalSize.width * fitScale, height: naturalSize.height * fitScale } : undefined}
+        >
+          <img
+            src={campaign.imageUrl}
+            alt={campaign.name}
+            className={naturalSize ? 'block h-full w-full' : 'block max-h-[80vh] max-w-[calc(100vw-1.5rem)] object-contain'}
+            style={{ filter: getFilterString(campaign.filters) }}
+            referrerPolicy="no-referrer"
+            onLoad={(event) => {
+              const el = event.currentTarget;
+              if (el.naturalWidth && el.naturalHeight) {
+                setNaturalSize({ width: el.naturalWidth, height: el.naturalHeight });
+              }
+            }}
+          />
 
           {/* Radius Effects */}
-          {campaign.hotspots?.filter(h => h.radius && h.radius > 0).map(h => {
+          {naturalSize && campaign.hotspots?.filter(h => h.radius && h.radius > 0).map(h => {
             const hf = getFilterString(h.filters);
             if (!hf) return null;
             return (
-              <div key={`r-${h.id}`} className="absolute inset-0 pointer-events-none"
-                style={{ clipPath: `circle(${h.radius}px at ${h.x}px ${h.y}px)` }}>
-                <img src={campaign.imageUrl} alt="" className="block" style={{ filter: hf }} referrerPolicy="no-referrer" />
+              <div key={`r-${h.id}`} className="absolute left-0 top-0 pointer-events-none"
+                style={{
+                  width: naturalSize.width,
+                  height: naturalSize.height,
+                  transform: `scale(${fitScale})`,
+                  transformOrigin: 'top left',
+                  clipPath: `circle(${h.radius}px at ${h.x}px ${h.y}px)`,
+                }}>
+                <img src={campaign.imageUrl} alt="" className="block" width={naturalSize.width} height={naturalSize.height} style={{ filter: hf }} referrerPolicy="no-referrer" />
               </div>
             );
           })}
@@ -345,6 +395,11 @@ export default function HotspotRenderer() {
             const isHover = h.triggerType === 'hover';
             const HotspotIcon = h.iconName ? (ICON_MAP[h.iconName] || Info) : null;
             const animType = h.animationType || ((h as any).pulseAnimation === false ? 'none' : 'pulse');
+            // Keep the visual dot usable on a phone even when a large photo
+            // is scaled down, and give it a finger-sized tap target.
+            const dotSize = Math.max(28, size * 2 * fitScale);
+            const tapSize = Math.max(44, dotSize + 16);
+            const ringRadius = Math.max(4, cornerRadius * 1.25 * fitScale);
 
             return (
               <button key={h.id}
@@ -358,10 +413,10 @@ export default function HotspotRenderer() {
                 onBlur={() => setHoveredHotspot(null)}
                 className="absolute flex items-center justify-center group transition-transform duration-75 ease-out rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/60"
                 style={{
-                  left: `${h.x}px`,
-                  top: `${h.y}px`,
-                  width: `${Math.max(32, size * 2 + 8)}px`,
-                  height: `${Math.max(32, size * 2 + 8)}px`,
+                  left: `${h.x * fitScale}px`,
+                  top: `${h.y * fitScale}px`,
+                  width: `${tapSize}px`,
+                  height: `${tapSize}px`,
                   transform: 'translate(-50%, -50%)',
                   // The dot you are hovering or have open always wins over a
                   // neighbour it happens to overlap.
@@ -371,7 +426,7 @@ export default function HotspotRenderer() {
                 {/* Animations */}
                 {animType === 'ping' && (
                   <div className="absolute inset-0 animate-ping opacity-30"
-                    style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25}px` }} />
+                    style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${ringRadius}px` }} />
                 )}
 
                 {animType === 'pulse' && (
@@ -379,12 +434,12 @@ export default function HotspotRenderer() {
                     animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
                     transition={{ repeat: Infinity, duration: 2 }}
                     className="absolute inset-0"
-                    style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${cornerRadius * 1.25}px` }} />
+                    style={{ backgroundColor: h.backgroundColor || '#2563eb', borderRadius: `${ringRadius}px` }} />
                 )}
 
                 <motion.div
                   className="relative flex items-center justify-center shadow-lg border-2 border-white"
-                  style={{ width: `${size * 2}px`, height: `${size * 2}px`, backgroundColor: h.backgroundColor || '#2563eb', color: h.iconColor || '#ffffff', borderRadius: `${cornerRadius}px` }}
+                  style={{ width: `${dotSize}px`, height: `${dotSize}px`, backgroundColor: h.backgroundColor || '#2563eb', color: h.iconColor || '#ffffff', borderRadius: `${Math.max(4, cornerRadius * fitScale)}px` }}
                   animate={
                     animType === 'bounce' ? { y: [0, -10, 0] } :
                       animType === 'float' ? { y: [0, -5, 0], x: [0, 2, -2, 0] } : {}
@@ -395,7 +450,7 @@ export default function HotspotRenderer() {
                   }
                   whileHover={{ scale: 1.1 }}
                 >
-                  {HotspotIcon ? <HotspotIcon className="w-3 h-3" /> : <DefaultIcon type={h.type} />}
+                  {HotspotIcon ? <HotspotIcon className="w-3.5 h-3.5" /> : <DefaultIcon type={h.type} />}
                 </motion.div>
                 {/* Title Tooltip */}
                 <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all pointer-events-none translate-y-2 group-hover:translate-y-0 z-10">
@@ -420,8 +475,8 @@ export default function HotspotRenderer() {
               className="absolute z-[99999] pointer-events-auto"
               style={{
                 // Open on the side of the dot that has room inside the image.
-                left: hoverCardOnRight ? `${hoveredHotspot.x - 30}px` : `${hoveredHotspot.x + 30}px`,
-                top: `${hoveredHotspot.y}px`,
+                left: hoverCardOnRight ? `${hoveredHotspot.x * fitScale - 30}px` : `${hoveredHotspot.x * fitScale + 30}px`,
+                top: `${hoveredHotspot.y * fitScale}px`,
                 transformOrigin: hoverCardOnRight ? 'right' : 'left',
                 transform: `translate(${hoverCardOnRight ? '-100%' : '0'}, -50%)`
               }}>
@@ -480,7 +535,7 @@ export default function HotspotRenderer() {
 
       {/* Zoom Controls */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-2xl border border-white/50 bg-white/80 p-2 shadow-xl backdrop-blur-md">
-        <button type="button" onClick={() => setZoom(prev => Math.max(prev - 0.2, 1))} aria-label="Zoom out" title="Zoom out" className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><X className="w-4 h-4 rotate-45" /></button>
+        <button type="button" onClick={() => setZoom(prev => Math.max(prev - 0.2, 1))} aria-label="Zoom out" title="Zoom out" className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><Minus className="w-4 h-4" /></button>
         <span className="text-[10px] font-black text-slate-400 w-12 text-center uppercase tracking-widest">{Math.round(zoom * 100)}%</span>
         <button type="button" onClick={() => setZoom(prev => Math.min(prev + 0.2, 5))} aria-label="Zoom in" title="Zoom in" className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"><Plus className="w-4 h-4" /></button>
       </div>
@@ -489,7 +544,7 @@ export default function HotspotRenderer() {
       <AnimatePresence>
         {activeHotspot && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-[999999]"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[999999] sm:p-6"
             onClick={() => { setActiveHotspot(null); setLeadCaptured(false); setFormError(null); }}>
             <motion.div
               role="dialog"
@@ -498,7 +553,7 @@ export default function HotspotRenderer() {
               initial={{ scale: 0.9, y: 20, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden"
+              className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] bg-white shadow-2xl sm:rounded-[2rem]"
               onClick={e => e.stopPropagation()}>
               <ModalContent hotspot={activeHotspot} onClose={() => { setActiveHotspot(null); setLeadCaptured(false); setFormError(null); }}
                 onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />

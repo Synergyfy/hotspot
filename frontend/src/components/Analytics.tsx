@@ -202,7 +202,7 @@ export default function Analytics() {
         </header>
 
         {/* Stats Grid */}
-        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:mb-10 lg:grid-cols-4 lg:gap-6">
           <StatCard
             title="Views"
             value={views}
@@ -256,7 +256,7 @@ export default function Analytics() {
                 </div>
               </div>
             </div>
-            <div className="h-72">
+            <div className="h-60 sm:h-72">
               {dailyData.length === 0 ? (
                 <EmptyState
                   icon={Activity}
@@ -416,9 +416,9 @@ function StatCard({
   };
 
   return (
-    <div className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-xl hover:shadow-blue-100/50 lg:p-8">
-      <div className="mb-5 flex items-center justify-between">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${colors[color]} transition-transform group-hover:scale-110`}>
+    <div className="group rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:shadow-xl hover:shadow-blue-100/50 sm:p-6 lg:rounded-[2rem] lg:p-8">
+      <div className="mb-3 flex items-center justify-between sm:mb-5">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl ${colors[color]} transition-transform group-hover:scale-110`}>
           <Icon className="h-5 w-5" />
         </div>
         {help && <HelpTip text={help} />}

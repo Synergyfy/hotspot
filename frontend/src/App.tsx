@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import Auth from './components/Auth';
+import Landing from './components/Landing';
 import CampaignEditor from './components/CampaignEditor';
 import Analytics from './components/Analytics';
 import HotspotRenderer from './components/HotspotRenderer';
@@ -35,17 +36,30 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-            <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
-            <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
-            <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
-            <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
-            <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
-            <Route path="/embed/:id" element={<HotspotRenderer />} />
-          </Routes>
+          <AppRoutes user={user} />
         </BrowserRouter>
       </ToastProvider>
     </ErrorBoundary>
+  );
+}
+
+function AppRoutes({ user }: { user: any }) {
+  const location = useLocation();
+
+  // /embed is the visitor-facing view; it keeps the default type scale.
+  useEffect(() => {
+    document.body.classList.toggle('embed-view', location.pathname.startsWith('/embed'));
+  }, [location.pathname]);
+
+  return (
+    <Routes>
+      <Route path="/" element={user ? <Dashboard /> : <Landing />} />
+      <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
+      <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
+      <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
+      <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
+      <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
+      <Route path="/embed/:id" element={<HotspotRenderer />} />
+    </Routes>
   );
 }

@@ -3,7 +3,7 @@ import type { Campaign, Domain } from '../types';
 import {
   Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload,
   Link as LinkIcon, Loader2, Users, HelpCircle, CheckCircle2, ArrowRight, Sparkles, AlertTriangle,
-  MousePointerClick, Share2, RefreshCw, ScanSearch,
+  MousePointerClick, Share2, RefreshCw, ScanSearch, Menu,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: '', imageUrl: '' });
@@ -240,13 +241,13 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       {/* Navigation */}
       <nav className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                <ImageIcon className="h-5 w-5 text-white" />
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+          <div className="flex h-14 items-center justify-between gap-2 sm:h-16">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 sm:h-8 sm:w-8">
+                <ImageIcon className="h-4 w-4 text-white sm:h-5 sm:w-5" />
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900">ClickSIP</span>
+              <span className="text-[15px] font-bold tracking-tight text-slate-900 sm:text-xl">ClickSIP</span>
               <span className="ml-2 hidden rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:inline">
                 Interactive images
               </span>
@@ -255,7 +256,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setHelpOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600"
+                className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex"
               >
                 <HelpCircle className="h-4 w-4" />
                 <span className="hidden sm:inline">How it works</span>
@@ -265,19 +266,19 @@ export default function Dashboard() {
                 className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex"
                 title="Control which websites can embed your campaigns"
               >
-                <Globe className="h-4 w-4" /> Domains
+                <Globe className="h-4 w-4" /> <span className="hidden lg:inline">Domains</span>
               </Link>
               <Link
                 to="/leads"
                 className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex"
                 title="Everyone who submitted a form on your campaigns"
               >
-                <Users className="h-4 w-4" /> Leads
+                <Users className="h-4 w-4" /> <span className="hidden lg:inline">Leads</span>
               </Link>
               <button
                 type="button"
                 onClick={signOut}
-                className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
+                className="hidden rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 sm:block"
                 title="Sign out"
                 aria-label="Sign out"
               >
@@ -286,13 +287,58 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={openCreateModal}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:px-4"
+                className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
               >
-                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New Campaign</span>
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">New Campaign</span>
                 <span className="sm:hidden">New</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-50 sm:hidden"
+                aria-expanded={mobileMenuOpen}
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
             </div>
           </div>
+
+          {mobileMenuOpen && (
+            <div className="grid gap-1 border-t border-slate-100 py-3 sm:hidden">
+              <Link
+                to="/domains"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <Globe className="h-4 w-4 text-slate-400" /> Domains
+              </Link>
+              <Link
+                to="/leads"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <Users className="h-4 w-4 text-slate-400" /> Leads
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setHelpOpen(true);
+                }}
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <HelpCircle className="h-4 w-4 text-slate-400" /> How it works
+              </button>
+              <button
+                type="button"
+                onClick={signOut}
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+              >
+                <LogOut className="h-4 w-4 text-slate-400" /> Sign out
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -391,10 +437,10 @@ export default function Dashboard() {
                     loading="lazy"
                     referrerPolicy="no-referrer"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/35 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <Link
                       to={`/campaigns/${campaign.id}/edit`}
-                      className="rounded-xl bg-white p-3 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-xl bg-white p-2.5 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600 sm:p-3"
                       title="Edit hotspots and styling"
                       aria-label={`Edit ${campaign.name}`}
                     >
@@ -402,7 +448,7 @@ export default function Dashboard() {
                     </Link>
                     <Link
                       to={`/campaigns/${campaign.id}/analytics`}
-                      className="rounded-xl bg-white p-3 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-xl bg-white p-2.5 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600 sm:p-3"
                       title="Views, clicks and leads"
                       aria-label={`Analytics for ${campaign.name}`}
                     >
@@ -412,7 +458,7 @@ export default function Dashboard() {
                       href={`/embed/${campaign.id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-xl bg-white p-3 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-xl bg-white p-2.5 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600 sm:p-3"
                       title="Open the live experience"
                       aria-label={`Preview ${campaign.name}`}
                     >
@@ -421,7 +467,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => copyCampaignLink(campaign)}
-                      className="rounded-xl bg-white p-3 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-xl bg-white p-2.5 text-slate-900 shadow-lg transition-all hover:bg-blue-50 hover:text-blue-600 sm:p-3"
                       title="Copy the shareable link"
                       aria-label={`Copy link for ${campaign.name}`}
                     >

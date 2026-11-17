@@ -67,10 +67,10 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
             exit={{ opacity: 0, scale: 0.96, y: 16 }}
             className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl"
           >
-            <div className="flex items-start justify-between border-b border-slate-100 p-8">
+            <div className="flex items-start justify-between border-b border-slate-100 p-4 sm:p-8">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">How ClickSIP works</h2>
-                <p className="mt-1 text-sm font-medium text-slate-500">Three steps from a flat image to something customers can explore.</p>
+                <h2 className="text-xl font-black text-slate-900 sm:text-2xl">How ClickSIP works</h2>
+                <p className="mt-1 text-[11px] font-medium leading-snug text-slate-500 sm:text-sm">Three steps from a flat image to something customers can explore.</p>
               </div>
               <button
                 type="button"
@@ -82,29 +82,29 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8">
-              <div className="grid gap-4 md:grid-cols-3">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
                 {STEPS.map(({ icon: Icon, title, body }) => (
-                  <div key={title} className="rounded-3xl border border-slate-100 bg-slate-50/60 p-5">
-                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-                      <Icon className="h-5 w-5" />
+                  <div key={title} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 sm:rounded-3xl sm:p-5">
+                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm sm:mb-4 sm:h-11 sm:w-11 sm:rounded-2xl">
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <h3 className="text-sm font-black text-slate-900">{title}</h3>
-                    <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{body}</p>
+                    <h3 className="text-[13px] font-black text-slate-900 sm:text-sm">{title}</h3>
+                    <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 sm:mt-2 sm:text-xs">{body}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-8 grid gap-5 md:grid-cols-2">
+              <div className="mt-6 grid gap-4 sm:mt-8 sm:gap-5 md:grid-cols-2">
                 {FAQS.map(({ q, a }) => (
-                  <div key={q} className="rounded-2xl border border-slate-100 p-5">
-                    <h4 className="text-sm font-black text-slate-900">{q}</h4>
-                    <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-500">{a}</p>
+                  <div key={q} className="rounded-2xl border border-slate-100 p-4 sm:p-5">
+                    <h4 className="text-[13px] font-black text-slate-900 sm:text-sm">{q}</h4>
+                    <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 sm:text-xs">{a}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center gap-4 rounded-2xl bg-blue-50 p-5 text-blue-700">
+              <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 p-4 text-blue-700 sm:mt-8 sm:gap-4 sm:p-5">
                 <ShieldCheck className="h-5 w-5 shrink-0" />
                 <p className="text-xs font-bold leading-relaxed">
                   Tip: preview any campaign in a new tab before sharing. What you see there is exactly what your audience gets.
@@ -115,11 +115,11 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50 p-5">
+            <div className="border-t border-slate-100 bg-slate-50 p-4 sm:p-5">
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 text-sm font-black text-white transition-all hover:bg-slate-800 active:scale-[0.99]"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3 text-[13px] font-black text-white transition-all hover:bg-slate-800 active:scale-[0.99] sm:py-3.5 sm:text-sm"
               >
                 Got it, let’s build <ArrowRight className="h-4 w-4" />
               </button>

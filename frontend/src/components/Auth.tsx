@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AlertCircle, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Sparkles, User, UserPlus } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Sparkles, User, UserPlus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { authApi } from '../api/auth';
 import { getErrorMessage } from '../lib/errors';
@@ -14,7 +15,8 @@ interface FieldErrors {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -125,6 +127,12 @@ export default function Auth() {
         <div className="flex flex-col justify-center p-7 sm:p-12 lg:p-16">
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="mx-auto w-full max-w-sm">
             <div className="mb-8">
+              <Link
+                to="/"
+                className="mb-5 inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 transition-colors hover:text-blue-600 sm:text-xs"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to home
+              </Link>
               <div className="mb-6 flex items-center gap-2 lg:hidden">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600">
                   <Sparkles className="h-5 w-5 text-white" />
