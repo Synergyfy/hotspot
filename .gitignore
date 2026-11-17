@@ -1,2 +1,7 @@
 node_modules
 config.bat
+
+# Environment variables (never commit secrets)
+.env
+.env.*
+!.env.example
