@@ -6,8 +6,8 @@
     "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w frontend\" \"npm run start:dev -w backend\"",
-    "build": "npm run build -w frontend && npm run build -w backend"
+    "dev": "node init && concurrently \"npm run dev -w frontend\" \"npm run start:dev -w backend\"",
+    "build": "node init && npm run build -w frontend && npm run build -w backend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
