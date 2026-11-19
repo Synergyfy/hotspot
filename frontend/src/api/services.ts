@@ -29,6 +29,8 @@ export const uploadsApi = {
     formData.append('file', file);
     return api.post('/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // Uploads need longer than the default 10 seconds on a slow connection.
+      timeout: 120000,
     });
   },
 };

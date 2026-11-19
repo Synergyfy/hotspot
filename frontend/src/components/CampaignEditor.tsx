@@ -7,7 +7,7 @@ import { Campaign, Hotspot, HotspotType, FormField } from '../types';
 import {
   Save, ArrowLeft, Plus, Settings, Trash2, MousePointer2, Type, Play, Mail,
   ShoppingCart, ChevronRight, Layout, Eye, Sliders, Sun, Contrast, Droplets,
-  Palette, Sparkles, Layers, Box, Code, Image as ImageIcon, FileText,
+  Palette, Layers, Box, Code, Image as ImageIcon, FileText,
   Smartphone, Music, ShieldCheck, X, Upload, Globe, Search, Info, ExternalLink,
   Phone, CheckCircle, ArrowRight, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award,
@@ -15,7 +15,6 @@ import {
   Share2, CheckCircle2, MousePointerClick, AlertTriangle, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
 
 import { campaignsApi } from '../api/campaigns';
 import { uploadsApi } from '../api/services';
@@ -25,6 +24,10 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { StepIndicator } from './ui/StepIndicator';
 import { PublishModal } from './PublishModal';
 import { getErrorMessage } from '../lib/errors';
+import { MAX_IMAGE_MB, MAX_VIDEO_MB, MAX_PRODUCT_IMAGES, isHttpUrl, validateMediaFile } from '../lib/media';
+import { HotspotVideo } from './ui/HotspotVideo';
+
+const MAX_EXTRA_PRODUCT_PHOTOS = MAX_PRODUCT_IMAGES - 1;
 
 const ICON_LIBRARY = [
   { name: 'Info', icon: Info },
@@ -111,6 +114,7 @@ export default function CampaignEditor() {
   const [saving, setSaving] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [publishOpen, setPublishOpen] = useState(false);
+  const [videoPreview, setVideoPreview] = useState<Hotspot | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -380,6 +384,12 @@ export default function CampaignEditor() {
   const handleFileChange = async (hid: string | number, field: 'imageUrl' | 'videoUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    const invalid = validateMediaFile(file, field === 'videoUrl' ? 'video' : 'image');
+    if (invalid) {
+      toast.error('File not uploaded', invalid);
+      return;
+    }
     try {
       setSaving(true);
       const { data } = await uploadsApi.upload(file);
@@ -387,6 +397,29 @@ export default function CampaignEditor() {
       toast.success('File uploaded', 'Remember to save or publish to keep it.');
     } catch (err) {
       toast.error('Upload failed', getErrorMessage(err, 'Try a smaller file or paste a URL instead.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddProductPhoto = async (hid: string | number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const invalid = validateMediaFile(file, 'image');
+    if (invalid) {
+      toast.error('Photo not added', invalid);
+      return;
+    }
+    try {
+      setSaving(true);
+      const { data } = await uploadsApi.upload(file);
+      setHotspots(current => current.map(h => h.id === hid
+        ? { ...h, additionalImages: [...(h.additionalImages || []), data.url].slice(0, MAX_EXTRA_PRODUCT_PHOTOS) }
+        : h));
+      toast.success('Photo added', 'Remember to save or publish to keep it.');
+    } catch (err) {
+      toast.error('Upload failed', getErrorMessage(err, 'Try a smaller photo.'));
     } finally {
       setSaving(false);
     }
@@ -500,12 +533,6 @@ export default function CampaignEditor() {
           <ToolButton icon={MousePointer2} active label="Select" desc="Click dots to edit" />
           <div className="hidden w-10 h-px shrink-0 bg-slate-100 lg:block"></div>
           <ToolButton icon={Plus} onClick={startAdding} label="Add hotspot" desc="Click image to place dots" />
-          <ToolButton
-            icon={Sparkles}
-            onClick={() => toast.info('AI Magic Scan is coming soon', 'For now, click the image to place hotspots yourself — it takes seconds.')}
-            label="AI Magic Scan"
-            desc="Auto-tag products (soon)"
-          />
           <ToolButton icon={Music} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Sound" desc="Background audio" />
           <ToolButton icon={ShieldCheck} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Watermark" desc="Protect your image" />
           <ToolButton icon={Settings} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Settings" desc="Filters & brand extras" />
@@ -617,7 +644,7 @@ export default function CampaignEditor() {
                         transform: `translate(${(activePreviewHotspot.x * displayScale > (image.width * displayScale) / 2) ? '-100%' : '0'}, -50%)`
                       }}
                     >
-                      <LivePreviewCard hotspot={activePreviewHotspot} />
+                      <LivePreviewCard hotspot={activePreviewHotspot} onPlay={() => setVideoPreview(activePreviewHotspot)} />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -822,33 +849,24 @@ export default function CampaignEditor() {
                                 </button>
                               </div>
                             ))}
-                            <button onClick={() => {
-                              const input = document.createElement('input');
-                              input.type = 'file';
-                              input.accept = 'image/*';
-                              input.onchange = (e: any) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    const images = [...(selectedHotspot.additionalImages || []), reader.result as string];
-                                    updateHotspot(selectedHotspot.id, { additionalImages: images });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              };
-                              input.click();
-                            }} className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-400 transition-all">
-                              <Plus className="w-4 h-4" />
-                            </button>
+                            {(selectedHotspot.additionalImages || []).length < MAX_EXTRA_PRODUCT_PHOTOS && (
+                              <label aria-label="Add photo" className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-400 transition-all cursor-pointer">
+                                <Plus className="w-4 h-4" />
+                                <input type="file" accept="image/*" className="hidden" onChange={e => handleAddProductPhoto(selectedHotspot.id, e)} />
+                              </label>
+                            )}
                           </div>
+                          <p className="mt-2 text-[10px] font-medium text-slate-400">
+                            Up to {MAX_PRODUCT_IMAGES} images per product, including the main image. {MAX_IMAGE_MB} MB each.
+                          </p>
                         </div>
                       </>
                     )}
 
                     {/* Video Fields */}
                     {selectedHotspot.type === 'video' && (
-                      <FileUploadField label="Video file" onUpload={(e: any) => handleFileChange(selectedHotspot.id, 'videoUrl', e)} preview={selectedHotspot.videoUrl} type="video" />
+                      <VideoField key={selectedHotspot.id} value={selectedHotspot.videoUrl || ''}
+                        onUpload={e => handleFileChange(selectedHotspot.id, 'videoUrl', e)} />
                     )}
 
                     {/* Image Fields */}
@@ -1020,6 +1038,45 @@ export default function CampaignEditor() {
         </aside>
       </div>
 
+      <AnimatePresence>
+        {videoPreview?.videoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm sm:p-6"
+            onClick={() => setVideoPreview(null)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={videoPreview.title || 'Video'}
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              className="w-full max-w-2xl overflow-hidden rounded-[1.5rem] bg-white shadow-2xl sm:rounded-[2rem]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative aspect-video overflow-hidden rounded-t-[1.5rem] bg-slate-900 sm:rounded-t-[2rem]">
+                <button
+                  type="button"
+                  onClick={() => setVideoPreview(null)}
+                  aria-label="Close video"
+                  className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
+                >
+                  <X className="h-4 w-4 text-slate-500" />
+                </button>
+                <HotspotVideo key={videoPreview.id} url={videoPreview.videoUrl} className="h-full w-full" autoPlay />
+              </div>
+              <div className="p-5 sm:p-6">
+                <h3 className="text-lg font-black text-slate-900 sm:text-xl">{videoPreview.title}</h3>
+                {videoPreview.description && <p className="mt-1 text-sm text-slate-500">{videoPreview.description}</p>}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <PublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
@@ -1064,7 +1121,7 @@ export default function CampaignEditor() {
 }
 
 /* ─── Live Preview Card ─── */
-function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
+function LivePreviewCard({ hotspot, onPlay }: { hotspot: Hotspot; onPlay?: () => void }) {
   const Icon = ICON_LIBRARY.find(i => i.name === hotspot.iconName)?.icon || Info;
 
   if (hotspot.type === 'product') {
@@ -1099,16 +1156,24 @@ function LivePreviewCard({ hotspot }: { hotspot: Hotspot }) {
   if (hotspot.type === 'video') {
     return (
       <div className="w-72 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 p-2">
-        <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPlay?.(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          aria-label={`Play ${hotspot.title || 'video'}`}
+          className="group/video relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden block pointer-events-auto cursor-pointer"
+        >
           {hotspot.videoUrl ? (
-            <video src={hotspot.videoUrl} className="w-full h-full object-cover rounded-2xl" />
+            <HotspotVideo url={hotspot.videoUrl} className="w-full h-full rounded-2xl pointer-events-none" autoPlay muted controls={false} />
           ) : (
-            <Play className="w-8 h-8 text-white/20" />
+            <span className="absolute inset-0 flex items-center justify-center text-white/20"><Play className="w-10 h-10" /></span>
           )}
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white"><Play className="w-5 h-5 fill-current" /></div>
-          </div>
-        </div>
+          <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover/video:bg-black/45">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/25 text-white shadow-lg backdrop-blur-md transition-transform group-hover/video:scale-110">
+              <Play className="w-5 h-5 fill-current" />
+            </span>
+          </span>
+        </button>
         <div className="p-4">
           <h4 className="font-black text-slate-900 text-xs truncate">{hotspot.title}</h4>
           {hotspot.description && <p className="text-slate-400 text-[10px] mt-1 line-clamp-2 font-medium">{hotspot.description}</p>}
@@ -1466,6 +1531,23 @@ function FileUploadField({ label, onUpload, preview, type = 'image' }: any) {
         )}
         <input type="file" ref={inputRef} onChange={onUpload} accept={getAcceptType()} className="hidden" />
       </div>
+      <p className="mt-2 text-[10px] font-medium text-slate-400">Up to {type === 'image' ? MAX_IMAGE_MB : MAX_VIDEO_MB} MB.</p>
+    </div>
+  );
+}
+
+function VideoField({ value, onUpload }: {
+  value: string;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const isUploadedFile = value.startsWith('/uploads/');
+
+  return (
+    <div className="space-y-3">
+      <FileUploadField label="Video file" onUpload={onUpload} preview={isUploadedFile ? value : ''} type="video" />
+      {(isUploadedFile || isHttpUrl(value)) && (
+        <HotspotVideo url={value} className="aspect-video w-full rounded-2xl bg-slate-900" />
+      )}
     </div>
   );
 }
@@ -1508,6 +1590,12 @@ function SettingsPanel({ campaign, setCampaign }: any) {
 
   const handleFileUpload = async (field: 'watermarkUrl' | 'soundUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
+    const invalid = file && validateMediaFile(file, field === 'watermarkUrl' ? 'image' : 'sound');
+    if (invalid) {
+      toast.error('File not uploaded', invalid);
+      return;
+    }
     if (file && campaign) {
       try {
         setSaving(true);

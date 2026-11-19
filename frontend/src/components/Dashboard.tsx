@@ -15,6 +15,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { HelpTip } from './ui/Tooltip';
 import { useToast } from './ui/Toast';
 import { getErrorMessage } from '../lib/errors';
+import { MAX_IMAGE_MB, validateMediaFile } from '../lib/media';
 import { copyToClipboard } from '../lib/clipboard';
 import { onboarding } from '../lib/onboarding';
 
@@ -130,12 +131,11 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setUploadError('That file is not an image. Choose a PNG, JPG or WebP file.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('That image is larger than 10MB. Please compress it and try again.');
+    e.target.value = '';
+
+    const invalid = validateMediaFile(file, 'image');
+    if (invalid) {
+      setUploadError(invalid);
       return;
     }
 
@@ -710,7 +710,7 @@ export default function Dashboard() {
                                 <>
                                   <Upload className="mb-2 h-8 w-8 text-slate-300" />
                                   <span className="text-sm font-bold text-slate-400">Click to upload an image</span>
-                                  <span className="mt-1 text-[10px] uppercase tracking-widest text-slate-300">PNG, JPG or WebP · up to 10MB</span>
+                                  <span className="mt-1 text-[10px] uppercase tracking-widest text-slate-300">PNG, JPG or WebP · up to {MAX_IMAGE_MB} MB</span>
                                 </>
                               )}
                             </>

@@ -18,8 +18,28 @@ const platform_express_1 = require("@nestjs/platform-express");
 const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
 const multer_1 = require("multer");
 const path_1 = require("path");
+const promises_1 = require("fs/promises");
+const MB = 1024 * 1024;
+const MAX_IMAGE_BYTES = 2 * MB;
+const MAX_VIDEO_BYTES = 10 * MB;
+const ALLOWED_EXTENSIONS = {
+    image: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'],
+    video: ['.mp4', '.webm', '.mov', '.m4v', '.ogv'],
+    audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac'],
+};
+function getMediaKind(file) {
+    const kind = file.mimetype.split('/')[0];
+    const extension = (0, path_1.extname)(file.originalname).toLowerCase();
+    return ALLOWED_EXTENSIONS[kind]?.includes(extension) ? kind : null;
+}
 let UploadsController = class UploadsController {
-    uploadFile(file) {
+    async uploadFile(file) {
+        if (!file)
+            throw new common_1.BadRequestException('No file was uploaded.');
+        if (getMediaKind(file) === 'image' && file.size > MAX_IMAGE_BYTES) {
+            await (0, promises_1.unlink)(file.path).catch(() => undefined);
+            throw new common_1.BadRequestException('Images must be 2 MB or smaller.');
+        }
         return {
             url: `/uploads/${file.filename}`,
         };
@@ -34,14 +54,20 @@ __decorate([
             destination: './uploads',
             filename: (req, file, cb) => {
                 const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-                cb(null, `${file.fieldname}-${uniqueSuffix}${(0, path_1.extname)(file.originalname)}`);
+                cb(null, `${file.fieldname}-${uniqueSuffix}${(0, path_1.extname)(file.originalname).toLowerCase()}`);
             },
         }),
+        limits: { fileSize: MAX_VIDEO_BYTES },
+        fileFilter: (req, file, cb) => {
+            if (getMediaKind(file))
+                return cb(null, true);
+            cb(new common_1.BadRequestException('That file type is not supported. Upload an image, video or audio file.'), false);
+        },
     })),
     __param(0, (0, common_1.UploadedFile)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], UploadsController.prototype, "uploadFile", null);
 exports.UploadsController = UploadsController = __decorate([
     (0, common_1.Controller)('uploads')

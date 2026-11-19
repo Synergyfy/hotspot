@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { publicApi, analyticsApi, leadsApi, domainsApi } from '../api/services';
 import { getErrorMessage } from '../lib/errors';
 import { onboarding, viewerHint } from '../lib/onboarding';
+import { HotspotVideo } from './ui/HotspotVideo';
 
 const ICON_MAP: Record<string, any> = {
   Info, ShoppingCart, Play, Mail, Type, ImageIcon, FileText, MousePointer2, Globe, ExternalLink,
@@ -480,7 +481,7 @@ export default function HotspotRenderer() {
                 transformOrigin: hoverCardOnRight ? 'right' : 'left',
                 transform: `translate(${hoverCardOnRight ? '-100%' : '0'}, -50%)`
               }}>
-              <InlineCard hotspot={hoveredHotspot} onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />
+              <InlineCard hotspot={hoveredHotspot} onAction={handleAction} onOpen={(hotspot) => handleHotspotInteraction(hotspot, 'click')} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -553,7 +554,7 @@ export default function HotspotRenderer() {
               initial={{ scale: 0.9, y: 20, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] bg-white shadow-2xl sm:rounded-[2rem]"
+              className={`max-h-[92vh] w-full overflow-y-auto rounded-[1.5rem] bg-white shadow-2xl sm:rounded-[2rem] ${activeHotspot.type === 'video' ? 'max-w-2xl' : 'max-w-sm'}`}
               onClick={e => e.stopPropagation()}>
               <ModalContent hotspot={activeHotspot} onClose={() => { setActiveHotspot(null); setLeadCaptured(false); setFormError(null); }}
                 onAction={handleAction} onSubmit={handleLeadSubmit} leadCaptured={leadCaptured} formError={formError} submitting={submitting} />
@@ -566,7 +567,7 @@ export default function HotspotRenderer() {
 }
 
 /* ─── Inline Hover Card ─── */
-function InlineCard({ hotspot, onAction, onSubmit, leadCaptured, formError, submitting }: { hotspot: Hotspot; onAction: (h: Hotspot) => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; leadCaptured: boolean; formError?: string | null; submitting?: boolean }) {
+function InlineCard({ hotspot, onAction, onOpen, onSubmit, leadCaptured, formError, submitting }: { hotspot: Hotspot; onAction: (h: Hotspot) => void; onOpen: (h: Hotspot) => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; leadCaptured: boolean; formError?: string | null; submitting?: boolean }) {
   if (hotspot.type === 'product') {
     const isServiceFirst = hotspot.offerType === 'service-first';
     const isBundle = hotspot.offerType === 'bundle';
@@ -613,20 +614,23 @@ function InlineCard({ hotspot, onAction, onSubmit, leadCaptured, formError, subm
   if (hotspot.type === 'video') {
     return (
       <div className="w-72 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 p-2">
-        <div className="aspect-video bg-slate-900 rounded-2xl overflow-hidden relative">
+        <button
+          type="button"
+          onClick={() => onOpen(hotspot)}
+          aria-label={`Play ${hotspot.title || 'video'}`}
+          className="group/video relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden block cursor-pointer"
+        >
           {hotspot.videoUrl ? (
-            <video src={hotspot.videoUrl} className="w-full h-full object-cover" controls autoPlay muted />
+            <HotspotVideo url={hotspot.videoUrl} className="w-full h-full pointer-events-none" autoPlay muted controls={false} />
           ) : (
             <div className="w-full h-full flex items-center justify-center"><Play className="w-10 h-10 text-white/20" /></div>
           )}
-          {!hotspot.videoUrl && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white cursor-pointer hover:bg-white/30 transition-all">
-                <Play className="w-6 h-6 fill-current" />
-              </div>
-            </div>
-          )}
-        </div>
+          <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover/video:bg-black/45">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/25 text-white shadow-lg backdrop-blur-md transition-transform group-hover/video:scale-110">
+              <Play className="w-6 h-6 fill-current" />
+            </span>
+          </span>
+        </button>
         <div className="p-4">
           <h4 className="font-black text-slate-900 text-xs truncate">{hotspot.title}</h4>
           {hotspot.description && <p className="text-slate-400 text-[10px] mt-1 line-clamp-2">{hotspot.description}</p>}
@@ -769,7 +773,7 @@ function ModalContent({ hotspot, onClose, onAction, onSubmit, leadCaptured, form
         <div className="relative">
           <button onClick={onClose} aria-label="Close video" className="absolute top-4 right-4 z-10 p-2 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full transition-colors shadow-sm"><X className="w-4 h-4 text-slate-500" /></button>
           <div className="aspect-video bg-slate-900 overflow-hidden rounded-t-[2rem]">
-            {hotspot.videoUrl ? <video src={hotspot.videoUrl} className="w-full h-full object-cover" controls autoPlay /> :
+            {hotspot.videoUrl ? <HotspotVideo url={hotspot.videoUrl} className="w-full h-full" autoPlay /> :
               <div className="w-full h-full flex items-center justify-center"><Play className="w-16 h-16 text-white/20" /></div>}
           </div>
         </div>

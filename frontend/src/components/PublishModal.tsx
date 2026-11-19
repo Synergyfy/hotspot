@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Check, CheckCircle2, Code, Copy, ExternalLink, Globe, Link2, Share2, ShieldAlert, X } from 'lucide-react';
+import { Check, CheckCircle2, Copy, ExternalLink, Link2, Share2, X } from 'lucide-react';
 import { domainsApi } from '../api/services';
 import { copyToClipboard } from '../lib/clipboard';
 import { onboarding } from '../lib/onboarding';
 import { StepIndicator } from './ui/StepIndicator';
 import { useToast } from './ui/Toast';
-
-type Tab = 'link' | 'embed' | 'html';
 
 export function PublishModal({
   open,
@@ -21,21 +19,10 @@ export function PublishModal({
   campaignName: string;
 }) {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('link');
-  const [copied, setCopied] = useState<Tab | null>(null);
+  const [copied, setCopied] = useState(false);
   const [domains, setDomains] = useState<{ verified: boolean }[] | null>(null);
 
   const url = `${window.location.origin}/embed/${campaignId}`;
-  const safeName = campaignName.replace(/"/g, '&quot;');
-
-  const snippets = useMemo(
-    () => ({
-      link: url,
-      embed: `<iframe\n  src="${url}"\n  width="100%"\n  height="600"\n  style="border:0;border-radius:16px"\n  allow="fullscreen"\n  title="${safeName}"\n></iframe>`,
-      html: `<a href="${url}" target="_blank" rel="noopener">${campaignName}</a>`,
-    }),
-    [url, safeName, campaignName],
-  );
 
   useEffect(() => {
     if (!open) return;
@@ -55,32 +42,22 @@ export function PublishModal({
 
   const verifiedCount = domains?.filter((domain) => domain.verified).length ?? 0;
 
-  const copy = async (value: string, kind: Tab) => {
-    const success = await copyToClipboard(value);
+  const copyLink = async () => {
+    const success = await copyToClipboard(url);
     if (!success) {
       toast.error('Could not copy', 'Select the text manually and copy it.');
       return;
     }
-    setCopied(kind);
+    setCopied(true);
     onboarding.markShared();
-    if (kind === 'link') {
-      toast.success('Link copied', 'Anyone with this link can open your campaign — no app needed.');
-    } else {
-      toast.success(kind === 'embed' ? 'Embed code copied' : 'HTML link copied', 'Paste it into your website or page builder.');
-    }
-    window.setTimeout(() => setCopied(null), 2000);
+    toast.success('Link copied', 'Anyone with this link can open your campaign — no app needed.');
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   const openPreview = () => {
     window.open(url, '_blank');
     onboarding.markPreviewed();
   };
-
-  const tabs: { id: Tab; label: string; icon: typeof Link2 }[] = [
-    { id: 'link', label: 'Share link', icon: Link2 },
-    { id: 'embed', label: 'Embed code', icon: Code },
-    { id: 'html', label: 'HTML link', icon: Globe },
-  ];
 
   return (
     <AnimatePresence>
@@ -110,7 +87,7 @@ export function PublishModal({
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">Publish &amp; share</h2>
                   <p className="mt-1 text-sm font-medium text-slate-500">
-                    “{campaignName}” is ready. Share the link, or embed it where your audience already is.
+                    “{campaignName}” is ready. Share the link with your audience.
                   </p>
                 </div>
               </div>
@@ -151,83 +128,31 @@ export function PublishModal({
                 </button>
               </div>
 
-              <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Step 2 · Choose how to share</p>
-              <div className="mb-4 flex gap-1 rounded-2xl bg-slate-100 p-1">
-                {tabs.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${
-                      tab === id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" /> {label}
-                  </button>
-                ))}
-              </div>
+              <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Step 2 · Share your link</p>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                {tab === 'link' ? (
-                  <div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <div className="min-w-0 flex-1 truncate rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs text-slate-600">{url}</div>
-                      <button
-                        type="button"
-                        onClick={() => copy(snippets.link, 'link')}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-[0.98]"
-                      >
-                        {copied === 'link' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        {copied === 'link' ? 'Copied' : 'Copy link'}
-                      </button>
-                    </div>
-                    <p className="mt-3 text-xs font-medium text-slate-500">
-                      Paste it in a post, email, bio or QR code. The page opens full-screen with your image and hotspots.
-                    </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 truncate rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs text-slate-600">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{url}</span>
                   </div>
-                ) : (
-                  <div>
-                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-xl border border-slate-200 bg-white p-4 font-mono text-[11px] leading-relaxed text-slate-600">
-                      {snippets[tab]}
-                    </pre>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-slate-500">
-                        {tab === 'embed'
-                          ? 'Paste into your CMS or page builder. Height 600px suits most layouts.'
-                          : 'Use this when you want a plain text link inside a page.'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => copy(snippets[tab], tab)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-slate-800"
-                      >
-                        {copied === tab ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copied === tab ? 'Copied' : 'Copy code'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {domains !== null && verifiedCount === 0 && (
-                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-                  <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div className="text-xs font-medium leading-relaxed">
-                    <p className="font-black">Embedding on a website?</p>
-                    <p className="mt-1">
-                      Add and verify that site’s domain first, otherwise visitors on that site may see an access error. Your preview link
-                      always works.
-                    </p>
-                    <a href="/domains" className="mt-2 inline-flex items-center gap-1 font-black text-amber-900 underline">
-                      Manage domains <ArrowRight className="h-3 w-3" />
-                    </a>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={copyLink}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-[0.98]"
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
                 </div>
-              )}
+                <p className="mt-3 text-xs font-medium text-slate-500">
+                  Paste it in a post, email, bio or QR code. The page opens full-screen with your image and hotspots.
+                </p>
+              </div>
 
               {verifiedCount > 0 && (
                 <div className="mt-5 flex items-center gap-2 text-xs font-bold text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" /> {verifiedCount} verified {verifiedCount === 1 ? 'domain' : 'domains'} can embed this campaign.
+                  <CheckCircle2 className="h-4 w-4" /> {verifiedCount} verified {verifiedCount === 1 ? 'domain' : 'domains'} can show this campaign.
                 </div>
               )}
 
