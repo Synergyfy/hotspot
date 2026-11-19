@@ -3,12 +3,16 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
+
   // Security: CORS
-  app.enableCors();
+  app.enableCors({ credentials: true });
+
+  // Cookies (used by the MCOM OAuth state check)
+  app.use(cookieParser());
   
   // API Prefix
   app.setGlobalPrefix('api');

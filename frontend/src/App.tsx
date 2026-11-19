@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import Auth from './components/Auth';
+import SsoCallback from './components/SsoCallback';
 import Landing from './components/Landing';
 import CampaignEditor from './components/CampaignEditor';
 import Analytics from './components/Analytics';
@@ -55,6 +56,7 @@ function AppRoutes({ user }: { user: any }) {
     <Routes>
       <Route path="/" element={user ? <Dashboard /> : <Landing />} />
       <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
+      <Route path="/auth/callback" element={<SsoCallback />} />
       <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
       <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
       <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />

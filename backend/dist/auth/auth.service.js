@@ -62,20 +62,20 @@ let AuthService = class AuthService {
         const user = await this.usersService.create({ email, password, name });
         const payload = { sub: user.id, email: user.email };
         return {
-            user: { id: user.id, email: user.email, name: user.name },
+            user: { id: user.id, email: user.email, name: user.name, role: user.role, isOnboarded: user.isOnboarded },
             token: await this.jwtService.signAsync(payload),
         };
     }
     async login(email, pass) {
         const user = await this.usersService.findByEmail(email);
-        if (!user)
+        if (!user || !user.password)
             throw new common_1.UnauthorizedException('Invalid credentials');
         const isMatch = await bcrypt.compare(pass, user.password);
         if (!isMatch)
             throw new common_1.UnauthorizedException('Invalid credentials');
         const payload = { sub: user.id, email: user.email };
         return {
-            user: { id: user.id, email: user.email, name: user.name },
+            user: { id: user.id, email: user.email, name: user.name, role: user.role, isOnboarded: user.isOnboarded },
             token: await this.jwtService.signAsync(payload),
         };
     }

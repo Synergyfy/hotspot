@@ -14,8 +14,42 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async create(data: { email: string; password: string; name?: string }) {
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+  async findByMcomUserId(mcomUserId: string) {
+    return this.prisma.user.findUnique({ where: { mcomUserId } });
+  }
+
+  async updateMcomFields(
+    userId: number,
+    mcomData: Partial<{
+      mcomUserId: string;
+      mcomMembershipLevel: string;
+      mcomMembershipTier: string;
+      mcomMembershipStatus: string;
+      mcomCanAccessVcard: boolean;
+      mcomAccessToken: string;
+      mcomRefreshToken: string;
+      mcomTokenExpiresAt: Date;
+      mcomTokensUpdatedAt: Date;
+    }>,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: mcomData,
+    });
+  }
+
+  async create(data: {
+    email: string;
+    password?: string | null;
+    name?: string;
+    role?: string;
+    mcomUserId?: string;
+    mcomMembershipLevel?: string;
+    mcomMembershipTier?: string;
+    mcomMembershipStatus?: string;
+    mcomCanAccessVcard?: boolean;
+  }) {
+    const hashedPassword = data.password ? await bcrypt.hash(data.password, 10) : null;
     return this.prisma.user.create({
       data: {
         ...data,

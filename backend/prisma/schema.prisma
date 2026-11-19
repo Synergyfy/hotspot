@@ -14,8 +14,22 @@ datasource db {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String
+  password  String?
   name      String?
+  role      String   @default("agent")
+  isOnboarded Boolean @default(false)
+
+  // MCOM Solutions SSO
+  mcomUserId            String?   @unique
+  mcomMembershipLevel   String?
+  mcomMembershipTier    String?
+  mcomMembershipStatus  String?
+  mcomCanAccessVcard    Boolean   @default(false)
+  mcomAccessToken       String?
+  mcomRefreshToken      String?
+  mcomTokenExpiresAt    DateTime?
+  mcomTokensUpdatedAt   DateTime?
+
   campaigns Campaign[]
   domains   Domain[]
   createdAt DateTime @default(now())

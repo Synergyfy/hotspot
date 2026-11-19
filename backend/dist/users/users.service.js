@@ -57,8 +57,17 @@ let UsersService = class UsersService {
     async findById(id) {
         return this.prisma.user.findUnique({ where: { id } });
     }
+    async findByMcomUserId(mcomUserId) {
+        return this.prisma.user.findUnique({ where: { mcomUserId } });
+    }
+    async updateMcomFields(userId, mcomData) {
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: mcomData,
+        });
+    }
     async create(data) {
-        const hashedPassword = await bcrypt.hash(data.password, 10);
+        const hashedPassword = data.password ? await bcrypt.hash(data.password, 10) : null;
         return this.prisma.user.create({
             data: {
                 ...data,

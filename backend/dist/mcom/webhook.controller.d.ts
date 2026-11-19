@@ -1,0 +1,13 @@
+import type { Request, Response } from 'express';
+import { UsersService } from '../users/users.service';
+import { ConfigService } from '@nestjs/config';
+export declare class WebhookController {
+    private configService;
+    private usersService;
+    private readonly logger;
+    private processedWebhooks;
+    private readonly MAX_PROCESSED;
+    constructor(configService: ConfigService, usersService: UsersService);
+    handleWebhook(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    private processEvent;
+}

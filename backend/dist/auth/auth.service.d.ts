@@ -9,6 +9,8 @@ export declare class AuthService {
             id: number;
             email: string;
             name: string | null;
+            role: string;
+            isOnboarded: boolean;
         };
         token: string;
     }>;
@@ -17,6 +19,8 @@ export declare class AuthService {
             id: number;
             email: string;
             name: string | null;
+            role: string;
+            isOnboarded: boolean;
         };
         token: string;
     }>;

@@ -20,6 +20,7 @@ const analytics_module_1 = require("./analytics/analytics.module");
 const domains_module_1 = require("./domains/domains.module");
 const public_module_1 = require("./public/public.module");
 const uploads_module_1 = require("./uploads/uploads.module");
+const mcom_module_1 = require("./mcom/mcom.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -36,6 +37,7 @@ exports.AppModule = AppModule = __decorate([
             domains_module_1.DomainsModule,
             public_module_1.PublicModule,
             uploads_module_1.UploadsModule,
+            mcom_module_1.McomModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

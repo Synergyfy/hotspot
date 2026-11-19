@@ -11,6 +11,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { DomainsModule } from './domains/domains.module';
 import { PublicModule } from './public/public.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { McomModule } from './mcom/mcom.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UploadsModule } from './uploads/uploads.module';
     DomainsModule,
     PublicModule,
     UploadsModule,
+    McomModule,
   ],
   controllers: [AppController],
   providers: [AppService],
