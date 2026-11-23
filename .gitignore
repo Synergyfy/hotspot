@@ -4,4 +4,3 @@ config.bat
 # Environment variables (never commit secrets)
 !.env.example
 .turbo/
-.env
