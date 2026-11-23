@@ -3,7 +3,7 @@ import type { Campaign, Domain } from '../types';
 import {
   Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload,
   Loader2, Users, HelpCircle, CheckCircle2, ArrowRight, Sparkles, AlertTriangle,
-  MousePointerClick, Share2, RefreshCw, ScanSearch, Menu,
+  MousePointerClick, Share2, RefreshCw, ScanSearch, Menu, ShieldCheck,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -267,6 +267,11 @@ export default function Dashboard() {
               >
                 <Users className="h-4 w-4" /> <span className="hidden lg:inline">Leads</span>
               </Link>
+              {(() => { try { return JSON.parse(localStorage.getItem('user') || '{}')?.role === 'admin'; } catch { return false; } })() && (
+                <Link to="/admin" className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex" title="Admin dashboard">
+                  <ShieldCheck className="h-4 w-4" /> <span className="hidden lg:inline">Admin</span>
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={openCreateModal}
@@ -305,6 +310,11 @@ export default function Dashboard() {
               >
                 <Users className="h-4 w-4 text-slate-400" /> Leads
               </Link>
+              {(() => { try { return JSON.parse(localStorage.getItem('user') || '{}')?.role === 'admin'; } catch { return false; } })() && (
+                <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50">
+                  <ShieldCheck className="h-4 w-4 text-slate-400" /> Admin
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => {

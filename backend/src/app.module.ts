@@ -18,6 +18,7 @@ import { PublicModule } from './public/public.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { McomModule } from './mcom/mcom.module';
 import { BillingModule } from './billing/billing.module';
+import { AdminModule } from './admin/admin.module';
 import { requireServiceAuth } from './mcom/serviceAuthMiddleware';
 
 @Module({
@@ -34,6 +35,7 @@ import { requireServiceAuth } from './mcom/serviceAuthMiddleware';
     UploadsModule,
     McomModule,
     BillingModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

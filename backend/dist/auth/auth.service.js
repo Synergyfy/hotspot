@@ -45,14 +45,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
+const config_1 = require("@nestjs/config");
 const users_service_1 = require("../users/users.service");
 const bcrypt = __importStar(require("bcrypt"));
 let AuthService = class AuthService {
     usersService;
     jwtService;
-    constructor(usersService, jwtService) {
+    configService;
+    constructor(usersService, jwtService, configService) {
         this.usersService = usersService;
         this.jwtService = jwtService;
+        this.configService = configService;
     }
     async register(data) {
         const { email, password, name } = data;
@@ -60,9 +63,9 @@ let AuthService = class AuthService {
         if (existing)
             throw new common_1.BadRequestException('User already exists');
         const user = await this.usersService.create({ email, password, name });
-        const payload = { sub: user.id, email: user.email };
+        const payload = { sub: user.id, email: user.email, role: user.role };
         return {
-            user: { id: user.id, email: user.email, name: user.name },
+            user: { id: user.id, email: user.email, name: user.name, role: user.role },
             token: await this.jwtService.signAsync(payload),
         };
     }
@@ -73,9 +76,33 @@ let AuthService = class AuthService {
         const isMatch = await bcrypt.compare(pass, user.password);
         if (!isMatch)
             throw new common_1.UnauthorizedException('Invalid credentials');
-        const payload = { sub: user.id, email: user.email };
+        const payload = { sub: user.id, email: user.email, role: user.role };
         return {
-            user: { id: user.id, email: user.email, name: user.name },
+            user: { id: user.id, email: user.email, name: user.name, role: user.role },
+            token: await this.jwtService.signAsync(payload),
+        };
+    }
+    async adminLogin(email, password) {
+        const adminEmail = this.configService.get('ADMIN_EMAIL');
+        const adminPassword = this.configService.get('ADMIN_PASSWORD');
+        if (!adminEmail || !adminPassword) {
+            throw new common_1.UnauthorizedException('Admin login is not configured');
+        }
+        if (email !== adminEmail || password !== adminPassword) {
+            throw new common_1.UnauthorizedException('Invalid admin credentials');
+        }
+        let user = await this.usersService.findByEmail(adminEmail);
+        if (!user) {
+            user = await this.usersService.create({ email: adminEmail, password: adminPassword, name: 'Super Admin' });
+        }
+        if (user.role !== 'admin') {
+            user = await this.usersService.updateMcomFields(user.id, { role: 'admin' });
+        }
+        if (!user)
+            throw new common_1.UnauthorizedException('Unable to provision admin user');
+        const payload = { sub: user.id, email: user.email, role: 'admin' };
+        return {
+            user: { id: user.id, email: user.email, name: user.name || 'Super Admin', role: 'admin' },
             token: await this.jwtService.signAsync(payload),
         };
     }
@@ -84,6 +111,7 @@ exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [users_service_1.UsersService,
-        jwt_1.JwtService])
+        jwt_1.JwtService,
+        config_1.ConfigService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

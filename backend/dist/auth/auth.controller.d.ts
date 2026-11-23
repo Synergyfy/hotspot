@@ -7,6 +7,7 @@ export declare class AuthController {
             id: number;
             email: string;
             name: string | null;
+            role: string;
         };
         token: string;
     }>;
@@ -15,6 +16,16 @@ export declare class AuthController {
             id: number;
             email: string;
             name: string | null;
+            role: string;
+        };
+        token: string;
+    }>;
+    adminLogin(body: any): Promise<{
+        user: {
+            id: number;
+            email: string;
+            name: string;
+            role: string;
         };
         token: string;
     }>;
