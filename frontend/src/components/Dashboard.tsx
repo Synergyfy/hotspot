@@ -269,20 +269,20 @@ export default function Dashboard() {
               </Link>
               <button
                 type="button"
+                onClick={openCreateModal}
+                className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
+              >
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">New Campaign</span>
+                <span className="sm:hidden">New</span>
+              </button>
+              <button
+                type="button"
                 onClick={signOut}
                 className="hidden rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 sm:block"
                 title="Sign out"
                 aria-label="Sign out"
               >
                 <LogOut className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
-              >
-                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">New Campaign</span>
-                <span className="sm:hidden">New</span>
               </button>
               <button
                 type="button"
