@@ -29,3 +29,29 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
 
   return fallback;
 }
+
+const SSO_ERROR_MESSAGES: Record<string, string> = {
+  oauth_failed: 'Authentication failed. Please try again.',
+  missing_code: 'Authorization code missing. Please try again.',
+  invalid_state: 'Invalid security state. Please try again.',
+  access_denied: 'You do not have permission to access this application.',
+  missing_token: 'Authentication token missing. Please try again.',
+  invalid_token: 'Invalid authentication token. Please try again.',
+  session_expired: 'Your session has expired. Please sign in again.',
+  server_error: 'We could not complete sign-in right now. Please try again.',
+  not_configured: 'Shared sign-in is not configured for this application.',
+  WHITELABEL_BUSINESS_ONLY: 'White-label access is available to Business accounts only.',
+  WHITELABEL_ACCESS_DENIED: 'Your account does not have white-label access to this application.',
+  SUBSCRIPTION_REQUIRED: 'An active subscription is required to access this application.',
+  NO_ACTIVE_PLAN: 'An active plan is required to access this application.',
+  PLAN_REQUIRED: 'An active plan is required to access this application.',
+  TRIAL_EXPIRED: 'Your trial has ended. Upgrade your plan to continue.',
+  PAYMENT_FAILED: 'Your last payment failed. Update your payment method to continue.',
+  ACCOUNT_SUSPENDED: 'Your account has been suspended. Contact support for help.',
+  MEMBERSHIP_INACTIVE: 'Your membership is inactive. Contact support for help.',
+};
+
+export function getSsoErrorMessage(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return SSO_ERROR_MESSAGES[code] || 'We could not sign you in right now. Please try again.';
+}

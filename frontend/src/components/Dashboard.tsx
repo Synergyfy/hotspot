@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Campaign, Domain } from '../types';
 import {
   Plus, Globe, Image as ImageIcon, BarChart3, Trash2, ExternalLink, Settings, LogOut, X, Upload,
-  Link as LinkIcon, Loader2, Users, HelpCircle, CheckCircle2, ArrowRight, Sparkles, AlertTriangle,
+  Loader2, Users, HelpCircle, CheckCircle2, ArrowRight, Sparkles, AlertTriangle,
   MousePointerClick, Share2, RefreshCw, ScanSearch, Menu,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -82,7 +82,6 @@ export default function Dashboard() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: '', imageUrl: '' });
-  const [uploadMethod, setUploadMethod] = useState<'url' | 'upload'>('upload');
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -145,7 +144,7 @@ export default function Dashboard() {
       const { data } = await uploadsApi.upload(file);
       setNewCampaign((previous) => ({ ...previous, imageUrl: data.url }));
     } catch (err) {
-      setUploadError(getErrorMessage(err, 'The image upload failed. Try a smaller file or paste an image URL instead.'));
+      setUploadError(getErrorMessage(err, 'The image upload failed. Try a smaller file.'));
     } finally {
       setSubmitting(false);
     }
@@ -262,13 +261,6 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">How it works</span>
               </button>
               <Link
-                to="/domains"
-                className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex"
-                title="Control which websites can embed your campaigns"
-              >
-                <Globe className="h-4 w-4" /> <span className="hidden lg:inline">Domains</span>
-              </Link>
-              <Link
                 to="/leads"
                 className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 sm:flex"
                 title="Everyone who submitted a form on your campaigns"
@@ -306,13 +298,6 @@ export default function Dashboard() {
 
           {mobileMenuOpen && (
             <div className="grid gap-1 border-t border-slate-100 py-3 sm:hidden">
-              <Link
-                to="/domains"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                <Globe className="h-4 w-4 text-slate-400" /> Domains
-              </Link>
               <Link
                 to="/leads"
                 onClick={() => setMobileMenuOpen(false)}
@@ -660,24 +645,9 @@ export default function Dashboard() {
                     </div>
 
                     <div className="mb-4 flex rounded-xl bg-slate-100 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setUploadMethod('upload')}
-                        className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-all ${
-                          uploadMethod === 'upload' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
+                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white py-2 text-sm font-bold text-blue-600 shadow-sm">
                         <Upload className="h-4 w-4" /> Upload
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUploadMethod('url')}
-                        className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-all ${
-                          uploadMethod === 'url' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        <LinkIcon className="h-4 w-4" /> URL
-                      </button>
+                      </div>
                     </div>
 
                     {uploadError && (
@@ -687,58 +657,43 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {uploadMethod === 'upload' ? (
-                      <div>
-                        <div
-                          onClick={() => !submitting && fileInputRef.current?.click()}
-                          className={`group relative flex aspect-video cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 transition-all hover:border-blue-400 hover:bg-blue-50/30 ${
-                            submitting ? 'cursor-wait opacity-70' : ''
-                          }`}
-                        >
-                          {newCampaign.imageUrl ? (
-                            <>
-                              <img src={newCampaign.imageUrl} alt="Campaign preview" className="h-full w-full object-cover" />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                                <span className="text-sm font-bold text-white">Change image</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              {submitting ? (
-                                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-                              ) : (
-                                <>
-                                  <Upload className="mb-2 h-8 w-8 text-slate-300" />
-                                  <span className="text-sm font-bold text-slate-400">Click to upload an image</span>
-                                  <span className="mt-1 text-[10px] uppercase tracking-widest text-slate-300">PNG, JPG or WebP · up to 10MB</span>
-                                </>
-                              )}
-                            </>
-                          )}
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            accept="image/*"
-                            className="hidden"
-                          />
-                        </div>
-                        <p className="mt-2 text-[11px] font-medium text-slate-400">Wide images (landscape) look best in the viewer.</p>
-                      </div>
-                    ) : (
-                      <div>
+                    <div>
+                      <div
+                        onClick={() => !submitting && fileInputRef.current?.click()}
+                        className={`group relative flex aspect-video cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 transition-all hover:border-blue-400 hover:bg-blue-50/30 ${
+                          submitting ? 'cursor-wait opacity-70' : ''
+                        }`}
+                      >
+                        {newCampaign.imageUrl ? (
+                          <>
+                            <img src={newCampaign.imageUrl} alt="Campaign preview" className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                              <span className="text-sm font-bold text-white">Change image</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {submitting ? (
+                              <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+                            ) : (
+                              <>
+                                <Upload className="mb-2 h-8 w-8 text-slate-300" />
+                                <span className="text-sm font-bold text-slate-400">Click to upload an image</span>
+                                <span className="mt-1 text-[10px] uppercase tracking-widest text-slate-300">PNG, JPG or WebP · up to 10MB</span>
+                              </>
+                            )}
+                          </>
+                        )}
                         <input
-                          type="url"
-                          value={newCampaign.imageUrl}
-                          onChange={(e) => setNewCampaign({ ...newCampaign, imageUrl: e.target.value })}
-                          placeholder="https://images.example.com/product.jpg"
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                          accept="image/*"
+                          className="hidden"
                         />
-                        <p className="mt-2 text-[11px] font-medium text-slate-400">
-                          The image must be publicly accessible. If it does not load, upload it instead.
-                        </p>
                       </div>
-                    )}
+                      <p className="mt-2 text-[11px] font-medium text-slate-400">Wide images (landscape) look best in the viewer.</p>
+                    </div>
                   </div>
 
                   <button

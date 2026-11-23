@@ -38,7 +38,7 @@ const FAQS = [
   },
   {
     q: 'Can I use my own images and video?',
-    a: 'Yes — upload files directly or paste an image URL. You can also add a watermark and a click sound to a campaign.',
+    a: 'Yes — upload files directly. You can also add a watermark and a click sound to a campaign.',
   },
   {
     q: 'Where do I see performance?',

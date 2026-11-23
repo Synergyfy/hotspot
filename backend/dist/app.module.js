@@ -20,7 +20,15 @@ const analytics_module_1 = require("./analytics/analytics.module");
 const domains_module_1 = require("./domains/domains.module");
 const public_module_1 = require("./public/public.module");
 const uploads_module_1 = require("./uploads/uploads.module");
+const mcom_module_1 = require("./mcom/mcom.module");
+const billing_module_1 = require("./billing/billing.module");
+const serviceAuthMiddleware_1 = require("./mcom/serviceAuthMiddleware");
 let AppModule = class AppModule {
+    configure(consumer) {
+        consumer
+            .apply(serviceAuthMiddleware_1.requireServiceAuth)
+            .forRoutes({ path: 'v1/mesh/(.*)', method: common_1.RequestMethod.ALL });
+    }
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
@@ -36,6 +44,8 @@ exports.AppModule = AppModule = __decorate([
             domains_module_1.DomainsModule,
             public_module_1.PublicModule,
             uploads_module_1.UploadsModule,
+            mcom_module_1.McomModule,
+            billing_module_1.BillingModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

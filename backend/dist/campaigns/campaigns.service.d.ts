@@ -12,9 +12,9 @@ export declare class CampaignsService {
         createdAt: Date;
         updatedAt: Date;
         imageUrl: string;
-        filters: import("@prisma/client/runtime/library").JsonValue | null;
         watermarkUrl: string | null;
         soundUrl: string | null;
+        filters: import("@prisma/client/runtime/library").JsonValue | null;
         userId: number;
     }>;
 }

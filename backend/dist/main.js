@@ -6,7 +6,10 @@ const common_1 = require("@nestjs/common");
 const path_1 = require("path");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
-    app.enableCors();
+    app.enableCors({
+        origin: process.env.FRONTEND_URL || true,
+        credentials: true,
+    });
     app.setGlobalPrefix('api');
     app.useStaticAssets((0, path_1.join)(process.cwd(), 'uploads'), {
         prefix: '/uploads/',
