@@ -109,7 +109,7 @@ export default function AuthCallback({ mode = 'callback' }: AuthCallbackProps) {
       <div className="text-center">
         <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-blue-600" />
         <p className="text-lg font-black text-slate-900">Completing sign-in…</p>
-        <p className="mt-1 text-sm text-slate-500">Please wait while we verify your MCOM account.</p>
+        <p className="mt-1 text-sm text-slate-500">Please wait while we verify your Central Hub account.</p>
       </div>
     </div>
   );
