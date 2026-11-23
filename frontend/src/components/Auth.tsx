@@ -34,7 +34,7 @@ export default function Auth() {
     try {
       await ssoApi.startLogin();
     } catch (err) {
-      setError(getErrorMessage(err, 'We could not connect to MCOM Solutions. Please try again.'));
+      setError(getErrorMessage(err, 'We could not connect to Central Hub Solution. Please try again.'));
       setLoading(false);
     }
   };
@@ -108,8 +108,8 @@ export default function Auth() {
               <h1 className="mb-2 text-3xl font-black text-slate-900">{isSignup ? 'Get started' : 'Welcome back'}</h1>
               <p className="text-slate-500">
                 {isSignup
-                  ? 'Create your ClickSIP workspace with your MCOM Solutions account.'
-                  : 'Use your MCOM Solutions account to manage your campaigns and leads.'}
+                  ? 'Create your ClickSIP workspace with your Central Hub Solution account.'
+                  : 'Use your Central Hub Solution account to manage your campaigns and leads.'}
               </p>
             </div>
 
@@ -134,11 +134,11 @@ export default function Auth() {
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-100 transition-all active:scale-[0.98] hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
-              {loading ? 'Connecting to MCOM…' : 'Sign in with MCOM Solutions'}
+              {loading ? 'Connecting to Central Hub…' : 'Sign in with Central Hub Solution'}
             </button>
 
             <p className="mt-8 text-center text-sm text-slate-500">
-              Don&apos;t have an account? Your MCOM Solutions account works here too.
+              Don&apos;t have an account? Your Central Hub Solution account works here too.
             </p>
 
             <p className="mt-6 text-center text-[11px] font-medium leading-relaxed text-slate-400">

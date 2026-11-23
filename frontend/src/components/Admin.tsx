@@ -163,7 +163,7 @@ export default function Admin() {
           </div>
         )}
 
-        {tab === 'users' && <Table headers={['User', 'Role', 'MCOM', 'Counts', 'Joined', 'Action']}>
+        {tab === 'users' && <Table headers={['User', 'Role', 'Central Hub', 'Counts', 'Joined', 'Action']}>
           {fUsers.map((u) => (
             <tr key={u.id} className="border-t border-slate-100">
               <Td><div className="font-bold text-slate-900">{u.email}</div><div className="text-xs text-slate-500">{u.name || '—'} {u.companyName ? `· ${u.companyName}` : ''}</div></Td>
