@@ -20,8 +20,7 @@ export const ssoApi = {
       throw new Error('MCOM Central is currently unavailable. Please try again shortly.');
     }
 
-    const baseUrl = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || '';
-    window.location.assign(`${baseUrl}/api/auth/sso/login`);
+    window.location.assign('/api/auth/sso/login');
   },
 
   complete: (code: string, state: string) => api.post('/auth/sso/complete', { code, state }),

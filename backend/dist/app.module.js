@@ -22,6 +22,7 @@ const public_module_1 = require("./public/public.module");
 const uploads_module_1 = require("./uploads/uploads.module");
 const mcom_module_1 = require("./mcom/mcom.module");
 const billing_module_1 = require("./billing/billing.module");
+const admin_module_1 = require("./admin/admin.module");
 const serviceAuthMiddleware_1 = require("./mcom/serviceAuthMiddleware");
 let AppModule = class AppModule {
     configure(consumer) {
@@ -46,6 +47,7 @@ exports.AppModule = AppModule = __decorate([
             uploads_module_1.UploadsModule,
             mcom_module_1.McomModule,
             billing_module_1.BillingModule,
+            admin_module_1.AdminModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

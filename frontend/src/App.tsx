@@ -9,6 +9,8 @@ import Analytics from './components/Analytics';
 import HotspotRenderer from './components/HotspotRenderer';
 import DomainManagement from './components/DomainManagement';
 import LeadsManager from './components/LeadsManager';
+import Admin from './components/Admin';
+import AdminLogin from './components/AdminLogin';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ToastProvider } from './components/ui/Toast';
 
@@ -69,6 +71,8 @@ function AppRoutes({ user }: { user: any }) {
       <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
       <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />
       <Route path="/leads" element={user ? <LeadsManager /> : <Navigate to="/login" />} />
+      <Route path="/admin/login" element={!user ? <AdminLogin /> : (user.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/" />)} />
+      <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to="/admin/login" />} />
       <Route path="/embed/:id" element={<HotspotRenderer />} />
     </Routes>
   );
