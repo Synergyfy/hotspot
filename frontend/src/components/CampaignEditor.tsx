@@ -6,7 +6,7 @@ import useImage from 'use-image';
 import { Campaign, Hotspot, HotspotType, FormField } from '../types';
 import {
   Save, ArrowLeft, Plus, Settings, Trash2, MousePointer2, Type, Play, Mail,
-  ShoppingCart, ChevronRight, Eye, Sparkles, Image as ImageIcon, FileText,
+  ShoppingCart, ChevronRight, Eye, Image as ImageIcon, FileText,
   Music, ShieldCheck, X, Upload, Globe, Info, ExternalLink,
   Phone, CheckCircle, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award,
@@ -497,12 +497,6 @@ export default function CampaignEditor() {
           <ToolButton icon={MousePointer2} active label="Select" desc="Click dots to edit" />
           <div className="hidden w-10 h-px shrink-0 bg-slate-100 lg:block"></div>
           <ToolButton icon={Plus} onClick={startAdding} label="Add hotspot" desc="Click image to place dots" />
-          <ToolButton
-            icon={Sparkles}
-            onClick={() => toast.info('AI Magic Scan is coming soon', 'For now, click the image to place hotspots yourself — it takes seconds.')}
-            label="AI Magic Scan"
-            desc="Auto-tag products (soon)"
-          />
           <ToolButton icon={Music} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Sound" desc="Background audio" />
           <ToolButton icon={ShieldCheck} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Watermark" desc="Protect your image" />
           <ToolButton icon={Settings} onClick={() => { setActiveTab('settings'); setSelectedId(null); }} label="Settings" desc="Filters & brand extras" />
