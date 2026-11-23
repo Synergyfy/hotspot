@@ -1,72 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Sparkles, User, UserPlus } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, LogIn, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { authApi } from '../api/auth';
-import { getErrorMessage } from '../lib/errors';
-
-interface FieldErrors {
-  name?: string;
-  email?: string;
-  password?: string;
-  form?: string;
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { ssoApi } from '../api/auth';
+import { getErrorMessage, getSsoErrorMessage } from '../lib/errors';
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
-  const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'register');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
+  const isSignup = searchParams.get('mode') === 'register';
+  const errorCode = searchParams.get('error') || searchParams.get('reason');
+  const [error, setError] = useState<string | null>(getSsoErrorMessage(errorCode));
   const [loading, setLoading] = useState(false);
+  const [membershipUrl, setMembershipUrl] = useState<string | null>(null);
+  const upgradeUrl = searchParams.get('upgradeUrl') || null;
+  const requiresUpgrade = [
+    'SUBSCRIPTION_REQUIRED',
+    'NO_ACTIVE_PLAN',
+    'PLAN_REQUIRED',
+    'TRIAL_EXPIRED',
+    'PAYMENT_FAILED',
+  ].includes(errorCode || '');
 
-  const switchMode = () => {
-    setIsLogin((previous) => !previous);
-    setErrors({});
-  };
+  useEffect(() => {
+    if (!requiresUpgrade) return;
+    ssoApi.getConfig()
+      .then(({ data }) => { setMembershipUrl(data?.membershipUrl || null); })
+      .catch((): void => undefined);
+  }, [requiresUpgrade]);
 
-  const validate = (): FieldErrors => {
-    const next: FieldErrors = {};
-    if (!isLogin && !name.trim()) next.name = 'Enter your full name.';
-    if (!email.trim()) next.email = 'Enter your email address.';
-    else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'That email address does not look right.';
-    if (!password) next.password = 'Enter your password.';
-    else if (!isLogin && password.length < 8) next.password = 'Use at least 8 characters.';
-    return next;
-  };
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-
-    const validationErrors = validate();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+  const handleLogin = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const payload = isLogin ? { email: email.trim(), password } : { email: email.trim(), password, name: name.trim() };
-      const { data } = isLogin ? await authApi.login(payload) : await authApi.register(payload);
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      window.location.href = '/';
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 401) {
-        setErrors({ form: 'That email and password combination is not correct. Check them and try again.' });
-      } else if (status === 400 && isLogin === false) {
-        setErrors({ form: getErrorMessage(err, 'We could not create that account. Try signing in instead.') });
-      } else {
-        setErrors({ form: getErrorMessage(err, 'We could not sign you in right now. Please try again.') });
-      }
-    } finally {
+      await ssoApi.startLogin();
+    } catch (err) {
+      setError(getErrorMessage(err, 'We could not connect to MCOM Solutions. Please try again.'));
       setLoading(false);
     }
   };
@@ -74,7 +42,6 @@ export default function Auth() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 font-sans sm:p-6">
       <div className="grid w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-2xl shadow-blue-100 lg:grid-cols-2">
-        {/* Left Side: Brand/Marketing */}
         <div className="relative hidden flex-col justify-between overflow-hidden bg-blue-600 p-12 text-white lg:flex">
           <div className="absolute -right-32 -top-32 h-64 w-64 rounded-full bg-blue-500 opacity-50 blur-3xl" />
           <div className="absolute -bottom-32 -left-32 h-64 w-64 rounded-full bg-blue-700 opacity-50 blur-3xl" />
@@ -123,7 +90,6 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Right Side: Auth Form */}
         <div className="flex flex-col justify-center p-7 sm:p-12 lg:p-16">
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="mx-auto w-full max-w-sm">
             <div className="mb-8">
@@ -139,147 +105,44 @@ export default function Auth() {
                 </div>
                 <span className="text-xl font-black tracking-tight text-slate-900">ClickSIP</span>
               </div>
-              <h1 className="mb-2 text-3xl font-black text-slate-900">{isLogin ? 'Welcome back' : 'Create your account'}</h1>
+              <h1 className="mb-2 text-3xl font-black text-slate-900">{isSignup ? 'Get started' : 'Welcome back'}</h1>
               <p className="text-slate-500">
-                {isLogin ? 'Sign in to manage your campaigns and leads.' : 'Start turning images into interactive experiences.'}
+                {isSignup
+                  ? 'Create your ClickSIP workspace with your MCOM Solutions account.'
+                  : 'Use your MCOM Solutions account to manage your campaigns and leads.'}
               </p>
             </div>
 
-            <form onSubmit={handleAuth} noValidate className="space-y-4">
-              {errors.form && (
-                <div role="alert" className="flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-700">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{errors.form}</span>
-                </div>
-              )}
-
-              {!isLogin && (
-                <div>
-                  <label htmlFor="auth-name" className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">
-                    Full name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300" />
-                    <input
-                      id="auth-name"
-                      type="text"
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => {
-                        setName(e.target.value);
-                        setErrors((previous) => ({ ...previous, name: undefined, form: undefined }));
-                      }}
-                      aria-invalid={Boolean(errors.name)}
-                      aria-describedby={errors.name ? 'auth-name-error' : undefined}
-                      className={`w-full rounded-2xl border bg-slate-50 py-4 pl-12 pr-4 text-slate-900 transition-all focus:outline-none focus:ring-2 ${
-                        errors.name ? 'border-red-200 focus:ring-red-400' : 'border-slate-100 focus:ring-blue-500'
-                      }`}
-                      placeholder="John Doe"
-                    />
-                  </div>
-                  {errors.name && (
-                    <p id="auth-name-error" className="mt-1.5 text-[11px] font-bold text-red-600">
-                      {errors.name}
-                    </p>
+            {error && (
+              <div role="alert" className="mb-5 flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {error}
+                  {requiresUpgrade && (upgradeUrl || membershipUrl) && (
+                    <a href={upgradeUrl || membershipUrl || '#'} className="ml-1 underline">
+                      Manage your subscription
+                    </a>
                   )}
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="auth-email" className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Email address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300" />
-                  <input
-                    id="auth-email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setErrors((previous) => ({ ...previous, email: undefined, form: undefined }));
-                    }}
-                    aria-invalid={Boolean(errors.email)}
-                    aria-describedby={errors.email ? 'auth-email-error' : undefined}
-                    className={`w-full rounded-2xl border bg-slate-50 py-4 pl-12 pr-4 text-slate-900 transition-all focus:outline-none focus:ring-2 ${
-                      errors.email ? 'border-red-200 focus:ring-red-400' : 'border-slate-100 focus:ring-blue-500'
-                    }`}
-                    placeholder="name@company.com"
-                  />
-                </div>
-                {errors.email && (
-                  <p id="auth-email-error" className="mt-1.5 text-[11px] font-bold text-red-600">
-                    {errors.email}
-                  </p>
-                )}
+                </span>
               </div>
+            )}
 
-              <div>
-                <label htmlFor="auth-password" className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300" />
-                  <input
-                    id="auth-password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete={isLogin ? 'current-password' : 'new-password'}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setErrors((previous) => ({ ...previous, password: undefined, form: undefined }));
-                    }}
-                    aria-invalid={Boolean(errors.password)}
-                    aria-describedby={errors.password ? 'auth-password-error' : !isLogin ? 'auth-password-help' : undefined}
-                    className={`w-full rounded-2xl border bg-slate-50 py-4 pl-12 pr-12 text-slate-900 transition-all focus:outline-none focus:ring-2 ${
-                      errors.password ? 'border-red-200 focus:ring-red-400' : 'border-slate-100 focus:ring-blue-500'
-                    }`}
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((previous) => !previous)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 transition-colors hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password ? (
-                  <p id="auth-password-error" className="mt-1.5 text-[11px] font-bold text-red-600">
-                    {errors.password}
-                  </p>
-                ) : (
-                  !isLogin && (
-                    <p id="auth-password-help" className="mt-1.5 text-[11px] font-medium text-slate-400">
-                      At least 8 characters.
-                    </p>
-                  )
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="mt-2 flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-100 transition-all active:scale-[0.98] hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : isLogin ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                {loading ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-100 transition-all active:scale-[0.98] hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+              {loading ? 'Connecting to MCOM…' : 'Sign in with MCOM Solutions'}
+            </button>
 
             <p className="mt-8 text-center text-sm text-slate-500">
-              {isLogin ? 'New to ClickSIP?' : 'Already have an account?'}{' '}
-              <button type="button" onClick={switchMode} className="font-bold text-blue-600 transition-colors hover:text-blue-700">
-                {isLogin ? 'Create an account' : 'Sign in instead'}
-              </button>
+              Don&apos;t have an account? Your MCOM Solutions account works here too.
             </p>
 
             <p className="mt-6 text-center text-[11px] font-medium leading-relaxed text-slate-400">
-              {isLogin
-                ? 'Forgot your password? Ask your workspace owner to reset it.'
-                : 'You only need an account to build campaigns. Your visitors never sign in.'}
+              You only need an account to build campaigns. Your visitors never sign in.
             </p>
           </motion.div>
         </div>

@@ -1,21 +1,19 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Stage, Layer, Image as KonvaImage, Circle, Rect, Transformer, Group, Text as KonvaText } from 'react-konva';
+import {   Stage, Layer, Image as KonvaImage } from 'react-konva';
 import Konva from 'konva';
 import useImage from 'use-image';
 import { Campaign, Hotspot, HotspotType, FormField } from '../types';
 import {
   Save, ArrowLeft, Plus, Settings, Trash2, MousePointer2, Type, Play, Mail,
-  ShoppingCart, ChevronRight, Layout, Eye, Sliders, Sun, Contrast, Droplets,
-  Palette, Sparkles, Layers, Box, Code, Image as ImageIcon, FileText,
-  Smartphone, Music, ShieldCheck, X, Upload, Globe, Search, Info, ExternalLink,
-  Phone, CheckCircle, ArrowRight, DollarSign, Euro, PoundSterling,
+  ShoppingCart, ChevronRight, Eye, Sparkles, Image as ImageIcon, FileText,
+  Music, ShieldCheck, X, Upload, Globe, Info, ExternalLink,
+  Phone, CheckCircle, DollarSign, Euro, PoundSterling,
   Heart, Star, Tag, Zap, Gift, MapPin, Camera, Bookmark, Bell, Award,
-  ThumbsUp, Clock, Flame, Video, Hash, ToggleLeft, Minus, Activity,
+  ThumbsUp, Clock, Flame, Video, Hash, Minus,
   Share2, CheckCircle2, MousePointerClick, AlertTriangle, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
 
 import { campaignsApi } from '../api/campaigns';
 import { uploadsApi } from '../api/services';
@@ -114,7 +112,6 @@ export default function CampaignEditor() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [hotspotToDelete, setHotspotToDelete] = useState<Hotspot | null>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const stageRef = useRef<any>(null);
@@ -771,13 +768,13 @@ export default function CampaignEditor() {
 
                   {/* Dynamic Fields */}
                   <div className="space-y-6 pt-6 border-t border-slate-100">
-                    <InputField label="Title" value={selectedHotspot.title} onChange={v => updateHotspot(selectedHotspot.id, { title: v })} />
-                    <TextAreaField label="Description" value={selectedHotspot.description || ''} onChange={v => updateHotspot(selectedHotspot.id, { description: v })} />
+                    <InputField label="Title" value={selectedHotspot.title} onChange={(v: string) => updateHotspot(selectedHotspot.id, { title: v })} />
+                    <TextAreaField label="Description" value={selectedHotspot.description || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { description: v })} />
 
                     {/* Product Fields */}
                     {selectedHotspot.type === 'product' && (
                       <>
-                        <TextAreaField label="Product details" value={selectedHotspot.productInfo || ''} onChange={v => updateHotspot(selectedHotspot.id, { productInfo: v })} />
+                        <TextAreaField label="Product details" value={selectedHotspot.productInfo || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { productInfo: v })} />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Currency</label>
@@ -786,7 +783,7 @@ export default function CampaignEditor() {
                               {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                           </div>
-                          <InputField label="Price" value={selectedHotspot.price || ''} onChange={v => updateHotspot(selectedHotspot.id, { price: v })} placeholder="0.00" />
+                          <InputField label="Price" value={selectedHotspot.price || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { price: v })} placeholder="0.00" />
                         </div>
 
                         <div>
@@ -887,14 +884,14 @@ export default function CampaignEditor() {
                             ))}
                           </div>
                         </div>
-                        <InputField label="Button text" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Subscribe" />
-                        <InputField label="Send visitors here after submitting (optional)" value={selectedHotspot.redirectUrl || ''} onChange={v => updateHotspot(selectedHotspot.id, { redirectUrl: v })} placeholder="https://..." />
+                        <InputField label="Button text" value={selectedHotspot.ctaText || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Subscribe" />
+                        <InputField label="Send visitors here after submitting (optional)" value={selectedHotspot.redirectUrl || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { redirectUrl: v })} placeholder="https://..." />
                       </>
                     )}
 
                     {selectedHotspot.type !== 'signup_form' && (
                       <>
-                        <InputField label="Button text (optional)" value={selectedHotspot.ctaText || ''} onChange={v => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Shop now" />
+                        <InputField label="Button text (optional)" value={selectedHotspot.ctaText || ''} onChange={(v: string) => updateHotspot(selectedHotspot.id, { ctaText: v })} placeholder="Shop now" />
 
                         <div className="space-y-4 pt-2">
                           <div>
@@ -939,7 +936,7 @@ export default function CampaignEditor() {
                             <InputField
                               label={selectedHotspot.action.type === 'email' ? 'Email address' : selectedHotspot.action.type === 'phone' ? 'Phone number' : 'Where should the button go?'}
                               value={selectedHotspot.action.value}
-                              onChange={v => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: v } })}
+                              onChange={(v: string) => updateHotspot(selectedHotspot.id, { action: { ...selectedHotspot.action, value: v } })}
                               placeholder={selectedHotspot.action.type === 'email' ? 'hello@example.com' : selectedHotspot.action.type === 'phone' ? '+1234567890' : 'https://...'}
                             />
                           )}
@@ -954,11 +951,11 @@ export default function CampaignEditor() {
                       Look &amp; feel <HelpTip text="These styles apply to the dot on the image. The card content follows the same colours." />
                     </p>
                     <div className="grid grid-cols-2 gap-4">
-                      <ColorPicker label="Dot colour" value={selectedHotspot.backgroundColor || '#2563eb'} onChange={v => updateHotspot(selectedHotspot.id, { backgroundColor: v })} />
-                      <ColorPicker label="Icon colour" value={selectedHotspot.iconColor || '#ffffff'} onChange={v => updateHotspot(selectedHotspot.id, { iconColor: v })} />
+                      <ColorPicker label="Dot colour" value={selectedHotspot.backgroundColor || '#2563eb'} onChange={(v: string) => updateHotspot(selectedHotspot.id, { backgroundColor: v })} />
+                      <ColorPicker label="Icon colour" value={selectedHotspot.iconColor || '#ffffff'} onChange={(v: string) => updateHotspot(selectedHotspot.id, { iconColor: v })} />
                     </div>
-                    <SliderField label="Dot size" value={selectedHotspot.width || 12} min={5} max={50} onChange={v => updateHotspot(selectedHotspot.id, { width: v, height: v })} />
-                    <SliderField label="Corner roundness" value={selectedHotspot.roundness || 100} min={0} max={100} onChange={v => updateHotspot(selectedHotspot.id, { roundness: v })} />
+                    <SliderField label="Dot size" value={selectedHotspot.width || 12} min={5} max={50} onChange={(v: number) => updateHotspot(selectedHotspot.id, { width: v, height: v })} />
+                    <SliderField label="Corner roundness" value={selectedHotspot.roundness || 100} min={0} max={100} onChange={(v: number) => updateHotspot(selectedHotspot.id, { roundness: v })} />
                   </div>
 
                   <button onClick={() => setHotspotToDelete(selectedHotspot)} className="w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2">
@@ -1056,7 +1053,9 @@ export default function CampaignEditor() {
         confirmLabel="Delete hotspot"
         cancelLabel="Keep it"
         destructive
-        onConfirm={() => hotspotToDelete && deleteHotspot(hotspotToDelete.id)}
+        onConfirm={() => {
+          if (hotspotToDelete) deleteHotspot(hotspotToDelete.id);
+        }}
         onCancel={() => setHotspotToDelete(null)}
       />
     </div>
@@ -1503,21 +1502,17 @@ function ToggleField({ label, checked, onChange }: any) {
 }
 
 function SettingsPanel({ campaign, setCampaign }: any) {
-  const [saving, setSaving] = useState(false);
   const toast = useToast();
 
   const handleFileUpload = async (field: 'watermarkUrl' | 'soundUrl', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && campaign) {
       try {
-        setSaving(true);
         const { data } = await uploadsApi.upload(file);
         setCampaign({ ...campaign, [field]: data.url });
         toast.success(field === 'watermarkUrl' ? 'Watermark added' : 'Sound added', 'Save the draft to keep this change.');
       } catch (err) {
         toast.error('Upload failed', getErrorMessage(err, 'Try a smaller file and make sure it is the right type.'));
-      } finally {
-        setSaving(false);
       }
     }
   };

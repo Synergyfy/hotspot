@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import Auth from './components/Auth';
+import AuthCallback from './components/AuthCallback';
 import Landing from './components/Landing';
 import CampaignEditor from './components/CampaignEditor';
 import Analytics from './components/Analytics';
@@ -51,10 +52,19 @@ function AppRoutes({ user }: { user: any }) {
     document.body.classList.toggle('embed-view', location.pathname.startsWith('/embed'));
   }, [location.pathname]);
 
+  const params = new URLSearchParams(location.search);
+  const isCallbackRoute = location.pathname === '/auth/callback' || location.pathname === '/sso-login';
+  if ((params.has('code') || params.has('token')) && !isCallbackRoute) {
+    return <Navigate to={`/auth/callback${location.search}`} replace />;
+  }
+
   return (
     <Routes>
       <Route path="/" element={user ? <Dashboard /> : <Landing />} />
       <Route path="/login" element={!user ? <Auth /> : <Navigate to="/" />} />
+      <Route path="/upgrade" element={<Auth />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/sso-login" element={<AuthCallback mode="handshake" />} />
       <Route path="/campaigns/:id/edit" element={user ? <CampaignEditor /> : <Navigate to="/login" />} />
       <Route path="/campaigns/:id/analytics" element={user ? <Analytics /> : <Navigate to="/login" />} />
       <Route path="/domains" element={user ? <DomainManagement /> : <Navigate to="/login" />} />

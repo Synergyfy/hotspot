@@ -46,6 +46,7 @@ exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const bcrypt = __importStar(require("bcrypt"));
+const crypto_1 = require("crypto");
 let UsersService = class UsersService {
     prisma;
     constructor(prisma) {
@@ -57,6 +58,9 @@ let UsersService = class UsersService {
     async findById(id) {
         return this.prisma.user.findUnique({ where: { id } });
     }
+    async findByMcomUserId(mcomUserId) {
+        return this.prisma.user.findUnique({ where: { mcomUserId } });
+    }
     async create(data) {
         const hashedPassword = await bcrypt.hash(data.password, 10);
         return this.prisma.user.create({
@@ -64,6 +68,22 @@ let UsersService = class UsersService {
                 ...data,
                 password: hashedPassword,
             },
+        });
+    }
+    async createSsoUser(data) {
+        const { password, ...rest } = data;
+        const hashedPassword = await bcrypt.hash(password ?? (0, crypto_1.randomBytes)(32).toString('hex'), 10);
+        return this.prisma.user.create({
+            data: {
+                ...rest,
+                password: hashedPassword,
+            },
+        });
+    }
+    async updateMcomFields(id, fields) {
+        return this.prisma.user.update({
+            where: { id },
+            data: fields,
         });
     }
 };

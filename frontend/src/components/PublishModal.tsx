@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Check, CheckCircle2, Code, Copy, ExternalLink, Globe, Link2, Share2, ShieldAlert, X } from 'lucide-react';
+import { Check, CheckCircle2, Code, Copy, ExternalLink, Globe, Link2, Share2, X } from 'lucide-react';
 import { domainsApi } from '../api/services';
 import { copyToClipboard } from '../lib/clipboard';
 import { onboarding } from '../lib/onboarding';
@@ -181,9 +181,6 @@ export function PublishModal({
                         {copied === 'link' ? 'Copied' : 'Copy link'}
                       </button>
                     </div>
-                    <p className="mt-3 text-xs font-medium text-slate-500">
-                      Paste it in a post, email, bio or QR code. The page opens full-screen with your image and hotspots.
-                    </p>
                   </div>
                 ) : (
                   <div>
@@ -208,22 +205,6 @@ export function PublishModal({
                   </div>
                 )}
               </div>
-
-              {domains !== null && verifiedCount === 0 && (
-                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-                  <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div className="text-xs font-medium leading-relaxed">
-                    <p className="font-black">Embedding on a website?</p>
-                    <p className="mt-1">
-                      Add and verify that site’s domain first, otherwise visitors on that site may see an access error. Your preview link
-                      always works.
-                    </p>
-                    <a href="/domains" className="mt-2 inline-flex items-center gap-1 font-black text-amber-900 underline">
-                      Manage domains <ArrowRight className="h-3 w-3" />
-                    </a>
-                  </div>
-                </div>
-              )}
 
               {verifiedCount > 0 && (
                 <div className="mt-5 flex items-center gap-2 text-xs font-bold text-emerald-700">

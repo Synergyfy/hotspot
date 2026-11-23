@@ -13,13 +13,41 @@ datasource db {
 
 model User {
   id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String?
+  email    String   @unique
+  password String
+  name     String?
   campaigns Campaign[]
   domains   Domain[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // MCOM Solutions SSO integration (src/mcom). Columns added in migration
+  // 20261120120000_mcom_identity_fields; see src/mcom/sso.model.ts for shapes.
+  isOnboarded           Boolean   @default(false)
+  mcomUserId            String?   @unique
+  mcomAccessToken       String?
+  mcomRefreshToken      String?
+  mcomTokenExpiresAt    DateTime?
+  mcomTokensUpdatedAt   DateTime?
+  mcomMembershipLevel   String?
+  mcomMembershipStatus  String?
+  mcomMembershipTier    String?
+  mcomCanAccessVcard    Boolean   @default(false)
+  mcomBusinessProfile   Json?
+  role                  String    @default("agent")
+  isAffiliate           Boolean   @default(false)
+  firstName             String?
+  lastName              String?
+  jobTitle              String?
+  phone                 String?
+  address               String?
+  postcode              String?
+  country               String?
+  companyName           String?
+  companyType           String?
+  companyIndustry       String?
+  companyWebsite        String?
+  companyLogo           String?
 }
 
 model Campaign {
