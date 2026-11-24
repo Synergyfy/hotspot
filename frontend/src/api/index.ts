@@ -23,7 +23,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const requestUrl: string = error.config?.url || '';
-    const isAuthAttempt = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+    const isAuthAttempt = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register') || requestUrl.includes('/auth/admin/login');
     const alreadyOnLogin = window.location.pathname.startsWith('/login');
 
     // A failed sign-in must stay on the page so the error message is visible.

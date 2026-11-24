@@ -1,6 +1,7 @@
 node_modules
-config.bat
 
 # Environment variables (never commit secrets)
 !.env.example
 .turbo/
+
+config.bat
